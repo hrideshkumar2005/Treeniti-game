@@ -1,0 +1,71 @@
+# ========================
+# Node Modules (all projects)
+# ========================
+node_modules/
+**/node_modules/
+
+# ========================
+# Environment Variables (NEVER commit these!)
+# ========================
+.env
+**/.env
+.env.local
+.env.production
+
+# ========================
+# Expo / React Native
+# ========================
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# ========================
+# Build Outputs
+# ========================
+build/
+dist/
+.next/
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Logs
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# ========================
+# Uploads (local files)
+# ========================
+treeniti-backend/uploads/*
+!treeniti-backend/uploads/.gitkeep
+
+# ========================
+# Scratch / Temp files
+# ========================
+scratch/
+*.scratch.js
+scratch_*.js
+check_*.js
+restore_*.js
+seed*.js
+
+# ========================
+# IDE
+# ========================
+.vscode/settings.json
+.idea/

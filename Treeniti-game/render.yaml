@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: treeniti-backend
+    env: node
+    region: singapore
+    plan: free
+    rootDir: treeniti-backend
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: COINS_TO_RUPEE_RATIO
+        value: 100
+      - key: MIN_WITHDRAWAL_RUPEES
+        value: 10
+      - key: DAILY_GROWTH_LIMIT_PERCENT
+        value: 4
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

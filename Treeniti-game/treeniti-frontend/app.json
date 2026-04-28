@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "treeniti-frontend",
+    "slug": "treeniti-frontend",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "scheme": "treenitifrontend",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.rahul0418.treenitifrontend",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you upload plantation proofs.",
+          "cameraPermission": "The app accesses your camera to let you take photos of your real trees."
+        }
+      ],
+      "expo-audio"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c4894286-ee22-4b36-bd0e-b6efa63094d1"
+      }
+    }
+  }
+}
