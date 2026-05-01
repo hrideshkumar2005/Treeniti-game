@@ -294,6 +294,7 @@ exports.getProfile = async (req, res) => {
         // Reset Daily Mission Counters
         if (user.lastLoginDate && new Date(user.lastLoginDate).toDateString() !== now.toDateString()) {
              user.dailyWaterCount = 0;
+             user.dailyShakeCount = 0;
              user.lastLoginDate = now;
              isUpdated = true;
         } else if (!user.lastLoginDate) {
@@ -385,6 +386,7 @@ exports.getDailyMissions = async (req, res) => {
             missions: [
                 { id: 'DAILY_LOGIN', title: 'Daily Attendance', completed: isDailyClaimed, reward: 10 },
                 { id: 'WATER_TREE', title: 'Water Tree (2 Times)', completed: isWateringDone, reward: 20, current: user.dailyWaterCount, target: 2 },
+                { id: 'SHAKE_TREE', title: 'Shake Tree (Daily)', completed: user.dailyShakeCount >= 1, reward: 20, current: user.dailyShakeCount, target: 1 },
                 { id: 'SPIN_WHEEL', title: 'Lucky Spin (4 Times)', completed: isSpinDone, reward: 20, current: user.dailySpinCount, target: 4 },
                 { id: 'READ_ARTICLE', title: 'Read Climate News', completed: user.readArticles.length >= 1, reward: 10 }
             ]
@@ -541,5 +543,55 @@ exports.claimWeeklyLoot = async (req, res) => {
         }).save();
 
         res.json({ success: true, reward, message: `Hooray! You found ${reward} coins inside the chest!`, walletCoins: user.walletCoins });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// --- Account Deletion Logic ---
+
+exports.requestAccountDeletion = async (req, res) => {
+    try {
+        const { reason } = req.body;
+        const user = await User.findById(req.user.userId);
+        
+        if (user.deletionRequest && user.deletionRequest.status === 'pending') {
+            return res.status(400).json({ error: 'A deletion request is already pending.' });
+        }
+
+        user.deletionRequest = {
+            status: 'pending',
+            requestedAt: new Date(),
+            reason: reason || 'User requested deletion'
+        };
+        await user.save();
+
+        res.json({ success: true, message: 'Your account deletion request has been submitted and is pending admin approval.' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+exports.getDeletionRequests = async (req, res) => {
+    try {
+        const requests = await User.find({ 'deletionRequest.status': 'pending' }).select('name mobile deletionRequest createdAt');
+        res.json({ success: true, requests });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+exports.processDeletionRequest = async (req, res) => {
+    try {
+        const { targetUserId, action } = req.body; // action: 'approve' | 'reject'
+        const user = await User.findById(targetUserId);
+
+        if (!user) return res.status(404).json({ error: 'User not found.' });
+
+        if (action === 'approve') {
+            user.deletionRequest.status = 'approved';
+            user.isBlocked = true; // Effectively disable the account
+            // In a real scenario, you might actually delete the record or anonymize it here
+            await user.save();
+            res.json({ success: true, message: 'Account deletion approved. User is now blocked.' });
+        } else {
+            user.deletionRequest.status = 'rejected';
+            await user.save();
+            res.json({ success: true, message: 'Account deletion request rejected.' });
+        }
     } catch (err) { res.status(500).json({ error: err.message }); }
 };

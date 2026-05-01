@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Dimensions, ScrollView, Alert, Share, ImageBackground } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Dimensions, ScrollView, Alert, Share, ImageBackground, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,7 +24,6 @@ export default function Certificate() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
 
-      // Fetch Profile for Name
       const profRes = await fetch(`${BASE_URL}/auth/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -33,14 +32,11 @@ export default function Certificate() {
         setUserName(profData.user.name);
       }
 
-      // Fetch Trees
       const treeRes = await fetch(`${BASE_URL}/tree`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const treeData = await treeRes.json();
       if (treeData.success) {
-        // SRS 3.7: Certificates for specific milestones or all trees?
-        // We'll show certificates for all planted trees to encourage users.
         setTrees(treeData.trees);
       }
     } catch (error) {
@@ -52,22 +48,9 @@ export default function Certificate() {
 
   useFocusEffect(useCallback(() => { fetchProfileAndTrees(); }, []));
 
-  const handleShare = async (tree) => {
-    try {
-      const result = await Share.share({
-        message: `I've successfully planted a tree "${tree.treeName}" on Treeniti app! My Tree ID: ${tree._id.substring(tree._id.length - 8)}. Join me in saving the planet!`,
-        url: 'https://treeniti.com', // Placeholder URL
-      });
-    } catch (error) {
-      Alert.alert(error.message);
-    }
-  };
-
   return (
     <View style={styles.outerContainer}>
       <SafeAreaView style={styles.container}>
-
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#1B5E20" />
@@ -99,29 +82,60 @@ export default function Certificate() {
 
 const CertificateCard = ({ tree, userName }) => {
   const viewRef = useRef();
+  const [loading, setLoading] = useState(false);
 
   const handleDownload = async () => {
     try {
-      // 🛡️ Request Permissions for Saving
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      setLoading(true);
+      // 1. Request Permissions (Write-only for saving certificates)
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
-        Alert.alert("Permission Denied", "We need permission to save the certificate to your gallery.");
+        Alert.alert("Permission Denied", "We need storage permissions to save the certificate to your gallery.");
+        setLoading(false);
         return;
       }
 
+      // 2. Capture the certificate view
+      // Small delay to ensure rendering is complete
       const uri = await captureRef(viewRef, {
         format: 'png',
-        quality: 1,
+        quality: 1.0,
+        result: 'tmpfile'
       });
 
-      // 💾 Save to Device Gallery
+      if (!uri) throw new Error("Capture failed");
+
+      // 3. Save to Media Library
       const asset = await MediaLibrary.createAssetAsync(uri);
-      await MediaLibrary.createAlbumAsync('Treeniti', asset, false);
       
-      Alert.alert("Success", "Certificate saved to your Gallery! 🌳");
+      // 4. Try to create/add to album (optional, wrapped in try/catch to avoid fatal fail if album exists)
+      try {
+        const album = await MediaLibrary.getAlbumAsync('Treeniti');
+        if (album == null) {
+          await MediaLibrary.createAlbumAsync('Treeniti', asset, false);
+        } else {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        }
+      } catch (albumError) {
+        console.log("Album error (non-fatal):", albumError);
+      }
+
+      Alert.alert(
+        "🎉 Success", 
+        "Certificate saved to your Gallery! 🌳",
+        [{ text: "OK" }, { text: "Share Instead", onPress: () => Sharing.shareAsync(uri) }]
+      );
     } catch (error) {
-      console.error("Capture Error:", error);
-      Alert.alert("Error", "Failed to save certificate.");
+      console.error("Download Error:", error);
+      Alert.alert("Download Failed", "Something went wrong. You can try sharing the certificate instead.");
+      
+      // Fallback: Try Sharing if Gallery Save fails
+      try {
+        const uri = await captureRef(viewRef, { format: 'png', quality: 0.8 });
+        if (uri) await Sharing.shareAsync(uri);
+      } catch (e) {}
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -138,104 +152,34 @@ const CertificateCard = ({ tree, userName }) => {
 
   return (
     <View style={styles.certCard}>
-      {/* 🏆 PREMIUM CERTIFICATE (SRS 3.7 Compliance) */}
       <ViewShot ref={viewRef} options={{ format: 'png', quality: 1 }}>
         <View style={styles.certificateWrapper}>
-          <ImageBackground source={require('../assets/image.png')} style={styles.certBg} imageStyle={{ opacity: 0.1, borderRadius: 15 }}>
-            <View style={styles.certBorderOuter}>
-              <View style={styles.certBorderInner}>
+          <ImageBackground
+            source={require('../assets/user_template.jpg')}
+            style={styles.fullTemplateBg}
+            imageStyle={{ borderRadius: 15 }}
+          >
+            <View style={styles.nameOverlayContainer}>
+              <Text style={styles.dynamicNameText}>{userName}</Text>
+            </View>
 
-                {/* --- 🟢 Top Branding --- */}
-                <View style={styles.certHeader}>
-                  <View style={styles.branding}>
-                    <Image source={require('../assets/treeniti_logo.png')} style={styles.certLogo} />
-                    <View>
-                      <Text style={styles.brandTitle}>Tree Niti</Text>
-                      <Text style={styles.brandTagline}>पेड़ भी, पैसा भी, भविष्य भी</Text>
-                    </View>
-                  </View>
-                  <View style={styles.saveLifeBadge}>
-                    <Text style={styles.badgeText}>SAVE TREE</Text>
-                    <Text style={styles.badgeText}>SAVE LIFE</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.mainCertTitle}>TREE CERTIFICATE</Text>
-                <View style={styles.presentRow}>
-                  <View style={styles.presentLine} />
-                  <Text style={styles.presentText}>This Certificate Is Proudly Presented To</Text>
-                  <View style={styles.presentLine} />
-                </View>
-
-                <Text style={styles.recipientName}>{userName}</Text>
-
-                <Text style={styles.congratsText}>
-                  For Successfully Planting And Nurturing A Tree With <Text style={{ fontWeight: 'bold' }}>Tree Niti</Text> And Contributing To A Greener, Healthier & Better Tomorrow.
-                </Text>
-
-                {/* --- 📊 Milestone Stats --- */}
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <Ionicons name="leaf" size={18} color="#1B5E20" />
-                    <Text style={styles.statLabel}>TREE PLANTED</Text>
-                    <Text style={styles.statValue}>{new Date(tree.plantedAt).toLocaleDateString()}</Text>
-                  </View>
-                  <View style={[styles.statItem, styles.statBorder]}>
-                    <Ionicons name="earth" size={18} color="#1B5E20" />
-                    <Text style={styles.statLabel}>YOUR IMPACT</Text>
-                    <Text style={styles.statValue}>Better Environment</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Ionicons name="heart" size={18} color="#1B5E20" />
-                    <Text style={styles.statLabel}>YOUR COMMITMENT</Text>
-                    <Text style={styles.statValue}>For Future Generations</Text>
-                  </View>
-                </View>
-
-                {/* --- ✍️ Signatures & Footer --- */}
-                <View style={styles.signatureSection}>
-                  <View style={styles.signBox}>
-                    <Text style={styles.digitalSign}>Alok Chaudhary</Text>
-                    <View style={styles.signLine} />
-                    <Text style={styles.signLabel}>Founder - Alok Chaudhary</Text>
-                  </View>
-                  <View style={styles.centerSeal}>
-                    <Text style={styles.sealQuote}>"Green Today Better Tomorrow"</Text>
-                  </View>
-                  <View style={styles.signBox}>
-                    <Text style={styles.digitalSign}>Vivek Chaudhary</Text>
-                    <View style={styles.signLine} />
-                    <Text style={styles.signLabel}>CEO - Vivek Chaudhary</Text>
-                  </View>
-                </View>
-
-                {/* --- 📍 Tree ID / GPS --- */}
-                <View style={styles.locationTag}>
-                  <Text style={styles.locationText}>Tree ID: {tree._id.substring(tree._id.length - 8).toUpperCase()}</Text>
-                  <Text style={styles.locationText}>Location: GPS Tracked</Text>
-                </View>
-
-                {/* --- 📢 Call to Action Footer --- */}
-                <View style={styles.ctaFooter}>
-                  <View style={styles.qrMock}>
-                    <Ionicons name="qr-code" size={30} color="#000" />
-                  </View>
-                  <Text style={styles.ctaText}>
-                    Proudly planted with Tree Niti. Scan QR to grow your own tree!
-                  </Text>
-                </View>
-
-              </View>
+            <View style={styles.dateOverlayContainer}>
+              <Text style={styles.dynamicDateText}>
+                {new Date(tree.plantedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
             </View>
           </ImageBackground>
         </View>
       </ViewShot>
 
-      {/* Actions */}
       <View style={styles.cardActions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleDownload}>
-          <Ionicons name="download-outline" size={18} color="#fff" />
-          <Text style={styles.actionText}>Download Image</Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleDownload} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Ionicons name="download-outline" size={18} color="#fff" />
+          )}
+          <Text style={styles.actionText}>{loading ? "Saving..." : "Download Image"}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShareText}>
           <Ionicons name="share-social-outline" size={18} color="#1B5E20" />
@@ -261,61 +205,47 @@ const styles = StyleSheet.create({
   plantNowBtn: { marginTop: 30, backgroundColor: '#1B5E20', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
   plantNowText: { color: '#fff', fontWeight: 'bold' },
 
-  certCard: { marginHorizontal: 10, marginBottom: 40 },
-  certificateWrapper: {
+  certCard: { marginHorizontal: 5, marginBottom: 40 },
+  certificateWrapper: { width: width - 20, backgroundColor: '#fff', borderRadius: 15, elevation: 15, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, overflow: 'hidden' },
+
+  fullTemplateBg: {
     width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    overflow: 'hidden'
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  certBg: { padding: 15 },
-  certBorderOuter: { borderWidth: 2, borderColor: '#D4AF37', borderRadius: 10, padding: 5 },
-  certBorderInner: { borderWidth: 1, borderColor: '#1B5E20', borderRadius: 5, padding: 15, alignItems: 'center', backgroundColor: 'rgba(255,251,240,0.9)' },
 
-  certHeader: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: 20 },
-  branding: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  certLogo: { width: 40, height: 40 },
-  brandTitle: { fontSize: 20, fontWeight: 'bold', color: '#1B5E20' },
-  brandTagline: { fontSize: 8, color: '#4CAF50', fontWeight: '600' },
+  nameOverlayContainer: {
+    position: 'absolute',
+    top: '-20 %',
+    width: '100%',
+    alignItems: 'center',
+    left: '-15%',
+    marginBottom: 82
 
-  saveLifeBadge: { backgroundColor: '#1B5E20', padding: 8, borderRadius: 10, alignItems: 'center' },
-  badgeText: { color: '#FFD700', fontSize: 7, fontWeight: '900' },
+  },
+  dynamicNameText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1B3C1B',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 1,
+  },
 
-  mainCertTitle: { fontSize: 28, fontWeight: '900', color: '#1B5E20', letterSpacing: 1, marginBottom: 10 },
-
-  presentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
-  presentLine: { flex: 1, height: 1, backgroundColor: '#D4AF37' },
-  presentText: { fontSize: 10, color: '#1B5E20', fontWeight: '600', backgroundColor: '#1B5E20', color: '#fff', paddingHorizontal: 15, paddingVertical: 4, borderRadius: 5 },
-
-  recipientName: { fontSize: 32, color: '#1B5E20', fontWeight: 'bold', marginBottom: 10, fontStyle: 'italic', textDecorationLine: 'underline', textDecorationColor: '#D4AF37' },
-
-  congratsText: { textAlign: 'center', fontSize: 11, color: '#333', lineHeight: 18, paddingHorizontal: 10, marginBottom: 20 },
-
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', backgroundColor: 'rgba(27, 94, 32, 0.05)', padding: 12, borderRadius: 10, marginBottom: 25 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statBorder: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(27, 94, 32, 0.2)' },
-  statLabel: { fontSize: 7, fontWeight: 'bold', color: '#666', marginTop: 5 },
-  statValue: { fontSize: 9, fontWeight: 'bold', color: '#1B5E20', marginTop: 2 },
-
-  signatureSection: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'flex-end', marginBottom: 20 },
-  signBox: { alignItems: 'center', flex: 1 },
-  digitalSign: { fontSize: 16, color: '#5C4033', fontStyle: 'italic', fontWeight: 'bold' },
-  signLine: { width: '80%', height: 1, backgroundColor: '#D4AF37', marginVertical: 5 },
-  signLabel: { fontSize: 8, fontWeight: 'bold', color: '#1B5E20' },
-
-  centerSeal: { flex: 1, alignItems: 'center' },
-  sealQuote: { fontSize: 12, color: '#1B5E20', fontWeight: 'bold', fontStyle: 'italic', textAlign: 'center' },
-
-  locationTag: { backgroundColor: '#1B5E20', paddingVertical: 6, paddingHorizontal: 20, borderRadius: 20, marginBottom: 20 },
-  locationText: { color: '#fff', fontSize: 8, fontWeight: 'bold' },
-
-  ctaFooter: { flexDirection: 'row', alignItems: 'center', gap: 15, width: '100%', borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 },
-  qrMock: { width: 50, height: 50, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eee', justifyContent: 'center', alignItems: 'center', borderRadius: 5 },
-  ctaText: { flex: 1, fontSize: 9, color: '#666', fontWeight: 'bold', fontStyle: 'italic' },
+  dateOverlayContainer: {
+    position: 'absolute',
+    bottom: '28%',
+    left: '8.2%',
+  },
+  dynamicDateText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+  },
 
   cardActions: { flexDirection: 'row', gap: 10, marginTop: 20, paddingHorizontal: 10 },
   actionBtn: { flex: 1, backgroundColor: '#1B5E20', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },

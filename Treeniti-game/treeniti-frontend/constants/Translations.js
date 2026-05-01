@@ -2,7 +2,7 @@ export default {
   en: {
     // General
     home: "Home",
-    missions: "Missions",
+    missions: "Daily Missions",
     articles: "Articles",
     team: "Team",
     menu: "Menu",

@@ -434,9 +434,10 @@ exports.shakeTree = async (req, res) => {
         tree.lastShaken = Date.now();
         await tree.save();
 
-        if (coinGain > 0) {
+        if (coinGain > 0 || fruitGain > 0 || true) { // Always count a shake attempt
             const user = await User.findById(req.user.userId);
             user.walletCoins += coinGain;
+            user.dailyShakeCount = (user.dailyShakeCount || 0) + 1;
             await user.save();
             await new Transaction({
                 userId: user._id, type: 'Credit', source: 'Shake Tree',
@@ -543,4 +544,19 @@ exports.getLeaderboard = async (req, res) => {
 
         res.json({ success: true, leaders });
     } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+exports.claimRewardedFertilizer = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        // SRS 4.5 Rewards: Award 1 fertilizer bag for ad view
+        user.fertilizerStock = (user.fertilizerStock || 0) + 1;
+        await user.save();
+
+        res.json({ success: true, message: "Fertilizer reward claimed successfully!", stock: user.fertilizerStock });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 };

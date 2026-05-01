@@ -9,6 +9,7 @@ import {
   Alert,
   ImageBackground,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,17 +17,68 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-// import LottieView from 'lottie-react-native'; // Removed due to missing dependency
 import BASE_URL from '../config/api';
 
 const { width, height } = Dimensions.get('window');
+
+// 🌌 Premium Particle Component
+const FloatingParticle = ({ delay, startPos }) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(anim, {
+                    toValue: 1,
+                    duration: 4000 + Math.random() * 2000,
+                    useNativeDriver: true,
+                })
+            ])
+        ).start();
+    }, []);
+
+    const translateY = anim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -height * 0.4]
+    });
+    const opacity = anim.interpolate({
+        inputRange: [0, 0.2, 0.8, 1],
+        outputRange: [0, 0.6, 0.6, 0]
+    });
+    const translateX = anim.interpolate({
+        inputRange: [0, 0.5, 1],
+        outputRange: [0, Math.random() * 50 - 25, 0]
+    });
+
+    return (
+        <Animated.View style={[styles.particle, { 
+            left: startPos, 
+            opacity, 
+            transform: [{ translateY }, { translateX }] 
+        }]}>
+            <FontAwesome5 name="star" size={8 + Math.random() * 6} color="#FFD700" />
+        </Animated.View>
+    );
+};
 
 export default function WeeklyLootScreen() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isOpening, setIsOpening] = useState(false);
-  const [countdown, setCountdown] = useState("");
+  const [countdown, setCountdown] = useState("LOADING...");
   const boxAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  // Pulse effect for the glow
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.5, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
 
   const fetchProfile = async () => {
     try {
@@ -40,15 +92,28 @@ export default function WeeklyLootScreen() {
           setUser(data.user);
           calculateCountdown(data.user.lastWeeklyLootAt);
       }
-    } catch (e) {}
+    } catch (e) {
+        setCountdown("OFFLINE");
+    }
   };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+        if (user?.lastWeeklyLootAt) {
+            calculateCountdown(user.lastWeeklyLootAt);
+        } else if (user) {
+            setCountdown("READY");
+        }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   const calculateCountdown = (lastLootDate) => {
     if (!lastLootDate) {
         setCountdown("READY");
         return;
     }
-    const ONE_WEEK = 604800000;
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
     const last = new Date(lastLootDate).getTime();
     const now = Date.now();
     const diff = now - last;
@@ -60,7 +125,13 @@ export default function WeeklyLootScreen() {
         const days = Math.floor(remaining / 86400000);
         const hours = Math.floor((remaining % 86400000) / 3600000);
         const mins = Math.floor((remaining % 3600000) / 60000);
-        setCountdown(`${days}d ${hours}h ${mins}m`);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        
+        if (days > 0) {
+            setCountdown(`${days}d ${hours}h ${mins}m`);
+        } else {
+            setCountdown(`${hours}h ${mins}m ${secs}s`);
+        }
     }
   };
 
@@ -70,15 +141,15 @@ export default function WeeklyLootScreen() {
     if (isOpening || countdown !== "READY") return;
     
     setIsOpening(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-    // Shake animation
-    Animated.sequence([
-      Animated.timing(boxAnim, { toValue: 1.2, duration: 100, useNativeDriver: true }),
-      Animated.timing(boxAnim, { toValue: 0.9, duration: 100, useNativeDriver: true }),
-      Animated.timing(boxAnim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
-      Animated.timing(boxAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start(async () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(boxAnim, { toValue: 1.15, duration: 60, useNativeDriver: true }),
+        Animated.timing(boxAnim, { toValue: 0.85, duration: 60, useNativeDriver: true }),
+      ]),
+      { iterations: 12 }
+    ).start(async () => {
         try {
             const token = await AsyncStorage.getItem('userToken');
             const res = await fetch(`${BASE_URL}/auth/rewards/weekly`, {
@@ -89,99 +160,151 @@ export default function WeeklyLootScreen() {
 
             if (data.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert("🎁 WEEKLY LOOT!", data.message, [{ text: "AWESOME!", onPress: fetchProfile }]);
+                Alert.alert("🎊 MAGICAL LOOT!", data.message || "You discovered a secret treasure!", [{ text: "COLLECT", onPress: fetchProfile }]);
             } else {
-                Alert.alert("Wait", data.error);
+                Alert.alert("Locked", data.error || "Chest is currently empty.");
             }
         } catch (e) {
-            Alert.alert("Error", "Could not open the loot chest.");
+            Alert.alert("Connection Error", "Please try again later.");
         } finally {
             setIsOpening(false);
+            boxAnim.setValue(1);
         }
     });
   };
 
   return (
     <View style={styles.container}>
-      <ImageBackground source={require('../assets/image.png')} style={styles.bg} imageStyle={{ opacity: 0.1 }}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={['#002B24', '#004D40', '#002B24']} style={styles.gradientBg}>
         <SafeAreaView style={styles.safeArea}>
           
+          {/* Particles Overlay */}
+          {[...Array(8)].map((_, i) => (
+            <FloatingParticle key={i} delay={i * 800} startPos={(width / 8) * i + 20} />
+          ))}
+
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={28} color="#fff" />
+              <Ionicons name="close-circle-outline" size={32} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>WEEKLY LOOT</Text>
-            <View style={{ width: 28 }} />
+            <View style={styles.headerTitleBox}>
+                <Text style={styles.headerTitle}>WEEKLY LOOT</Text>
+                <View style={styles.titleUnderline} />
+            </View>
+            <View style={{ width: 32 }} />
           </View>
 
           <View style={styles.content}>
-             <View style={styles.chestContainer}>
-                <Animated.View style={{ transform: [{ scale: boxAnim }] }}>
+             <View style={styles.mainStage}>
+                {/* 🌟 Background Glow */}
+                <Animated.View style={[styles.glowRing, { 
+                    opacity: glowAnim.interpolate({ inputRange:[0,1], outputRange:[0.2, 0.5] }),
+                    transform: [{ scale: glowAnim.interpolate({ inputRange:[0,1], outputRange:[1, 1.3] }) }]
+                }]} />
+
+                <Animated.View style={[styles.chestBox, { transform: [{ scale: boxAnim }] }]}>
+                    <LinearGradient colors={['rgba(255,215,0,0.1)', 'transparent']} style={styles.chestInnerGlow} />
                     <MaterialCommunityIcons 
-                        name={countdown === "READY" ? "treasure-chest" : "lock-reset"} 
-                        size={180} 
-                        color={countdown === "READY" ? "#FFD700" : "#A5D6A7"} 
+                        name={countdown === "READY" ? "treasure-chest" : "lock-clock"} 
+                        size={160} 
+                        color={countdown === "READY" ? "#FFD700" : "rgba(255,255,255,0.2)"} 
                     />
+                    {countdown === "READY" && (
+                        <View style={styles.readyBadge}>
+                            <Text style={styles.readyBadgeText}>READY</Text>
+                        </View>
+                    )}
                 </Animated.View>
                 
-                <Text style={styles.lootTitle}>
-                    {countdown === "READY" ? "YOUR WEEKLY REWARD IS READY!" : "LOOT CHARGING..."}
-                </Text>
-                
-                <View style={styles.timerBadge}>
-                    <Ionicons name="time-outline" size={20} color="#fff" />
-                    <Text style={styles.timerText}>{countdown}</Text>
+                <View style={styles.statusSection}>
+                    <Text style={styles.statusLabel}>
+                        {countdown === "READY" ? "TAP TO REVEAL TREASURE" : "NEXT LOOT IN"}
+                    </Text>
+                    <View style={styles.timerContainer}>
+                        <LinearGradient colors={['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']} style={styles.timerGlass}>
+                            <Text style={[styles.timerValue, countdown === "READY" && styles.readyTimer]}>
+                                {countdown}
+                            </Text>
+                        </LinearGradient>
+                    </View>
                 </View>
 
                 <TouchableOpacity 
-                    style={[styles.openBtn, countdown !== "READY" && styles.disabledBtn]} 
+                    style={[styles.actionBtn, countdown !== "READY" && styles.disabledBtn]} 
                     onPress={handleOpenBox}
                     disabled={countdown !== "READY" || isOpening}
                 >
                     <LinearGradient 
-                        colors={countdown === "READY" ? ['#FFD700', '#F57F17'] : ['#555', '#333']} 
-                        style={styles.openBtnInner}
+                        colors={countdown === "READY" ? ['#FFD700', '#F9A825', '#FFD700'] : ['#444', '#222']} 
+                        start={{x:0, y:0}} end={{x:1, y:0}}
+                        style={styles.actionBtnInner}
                     >
-                        <Text style={styles.openBtnText}>{isOpening ? "OPENING..." : countdown === "READY" ? "OPEN CHEST" : "LOCKED"}</Text>
+                        <Text style={styles.actionBtnText}>
+                            {isOpening ? "UNLOCKING..." : countdown === "READY" ? "CLAIM REWARD" : "LOCKED"}
+                        </Text>
+                        {countdown === "READY" && <Ionicons name="flash" size={18} color="#fff" />}
                     </LinearGradient>
                 </TouchableOpacity>
              </View>
 
-             <View style={styles.infoBox}>
-                <Text style={styles.infoHead}>What is Weekly Loot?</Text>
-                <Text style={styles.infoDesc}>
-                    Every 7 days, you get a chance to open a mysterious treasure chest containing between 200 to 1000 coins! Keep playing and come back next week for more.
-                </Text>
+             <View style={styles.footerCard}>
+                <View style={styles.infoRow}>
+                    <View style={styles.infoIconBox}>
+                        <FontAwesome5 name="gem" size={14} color="#FFD700" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.infoTitle}>Guaranteed Rewards</Text>
+                        <Text style={styles.infoSub}>Open every week for 200-1000 Coins & items.</Text>
+                    </View>
+                </View>
              </View>
           </View>
 
         </SafeAreaView>
-      </ImageBackground>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#004D40' },
-  bg: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#002B24' },
+  gradientBg: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 25, paddingTop: 10 },
+  headerTitleBox: { alignItems: 'center' },
+  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 4 },
+  titleUnderline: { width: 40, height: 3, backgroundColor: '#FFD700', marginTop: 5, borderRadius: 2 },
   backBtn: { padding: 5 },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 2 },
   
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  chestContainer: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 40, borderRadius: 40, width: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  lootTitle: { color: '#fff', fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 30, marginBottom: 20 },
+  particle: { position: 'absolute', bottom: -50, zIndex: 1 },
   
-  timerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 25, gap: 10, marginBottom: 40 },
-  timerText: { color: '#FFD700', fontSize: 22, fontWeight: '900' },
+  content: { flex: 1, paddingHorizontal: 25, justifyContent: 'center' },
+  mainStage: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 40, paddingVertical: 50, paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  
+  glowRing: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#FFD700', top: 50 },
+  
+  chestBox: { width: 220, height: 220, justifyContent: 'center', alignItems: 'center', borderRadius: 110, backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 2, borderColor: 'rgba(255,215,0,0.2)', shadowColor: '#FFD700', shadowOpacity: 0.2, shadowRadius: 20 },
+  chestInnerGlow: { ...StyleSheet.absoluteFillObject, borderRadius: 110 },
+  
+  readyBadge: { position: 'absolute', top: 30, right: 20, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, transform: [{ rotate: '15deg' }] },
+  readyBadgeText: { color: '#000', fontSize: 10, fontWeight: '900' },
 
-  openBtn: { width: '100%', height: 60, borderRadius: 30, overflow: 'hidden', elevation: 10, shadowColor: '#FFD700', shadowOpacity: 0.3, shadowRadius: 10 },
-  disabledBtn: { shadowOpacity: 0, elevation: 0 },
-  openBtnInner: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  openBtnText: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  statusSection: { alignItems: 'center', marginTop: 40, width: '100%' },
+  statusLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+  timerContainer: { width: '100%', alignItems: 'center' },
+  timerGlass: { paddingVertical: 15, paddingHorizontal: 40, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', minWidth: 200, alignItems: 'center' },
+  timerValue: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 1 },
+  readyTimer: { color: '#FFD700', textShadowColor: 'rgba(255,215,0,0.5)', textShadowRadius: 10 },
 
-  infoBox: { marginTop: 50, padding: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20 },
-  infoHead: { color: '#FFD700', fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  infoDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20 }
+  actionBtn: { width: '100%', height: 65, borderRadius: 20, marginTop: 40, overflow: 'hidden', elevation: 15, shadowColor: '#FFD700', shadowOpacity: 0.4, shadowRadius: 15 },
+  actionBtnInner: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  actionBtnText: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  disabledBtn: { shadowOpacity: 0, elevation: 0, opacity: 0.8 },
+
+  footerCard: { marginTop: 30, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 25, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  infoIconBox: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,215,0,0.1)', justifyContent: 'center', alignItems: 'center' },
+  infoTitle: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  infoSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 }
 });

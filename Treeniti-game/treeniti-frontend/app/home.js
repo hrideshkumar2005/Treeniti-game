@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   Alert,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -43,6 +44,7 @@ export default function Home() {
   const [activities, setActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const sliderRef = useRef(null);
 
   const sliderImages = [
     require('../assets/slider1.jpg'),
@@ -52,8 +54,12 @@ export default function Home() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentImgIndex((prev) => (prev === sliderImages.length - 1 ? 0 : prev + 1));
-    }, 3000);
+      setCurrentImgIndex((prev) => {
+        const nextIndex = prev === sliderImages.length - 1 ? 0 : prev + 1;
+        sliderRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+        return nextIndex;
+      });
+    }, 4000);
 
     fetchUserDashboard();
     fetchActivities();
@@ -204,10 +210,42 @@ export default function Home() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
-          {/* Hero Slider */}
-          <View style={styles.heroCard}>
-            <Image source={sliderImages[currentImgIndex]} key={currentImgIndex} style={styles.heroImg} resizeMode="cover" />
-            <View style={styles.heroOverlay}><Text style={styles.welcomeText}>Hi, {userData.name}</Text></View>
+          {/* Swipeable Hero Slider with Dots */}
+          <View style={{ height: 180, marginTop: 10 }}>
+            <FlatList
+              ref={sliderRef}
+              data={sliderImages}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                setCurrentImgIndex(index);
+              }}
+              keyExtractor={(_, i) => i.toString()}
+              getItemLayout={(_, index) => ({
+                length: width,
+                offset: width * index,
+                index,
+              })}
+              renderItem={({ item }) => (
+                <View style={{ width: width, alignItems: 'center' }}>
+                  <View style={[styles.heroCard, { marginTop: 0 }]}>
+                    <Image source={item} style={styles.heroImg} resizeMode="cover" />
+                    <View style={styles.heroOverlay}><Text style={styles.welcomeText}>Hi, {userData.name}</Text></View>
+                  </View>
+                </View>
+              )}
+            />
+            {/* Pagination Dots */}
+            <View style={styles.paginationDots}>
+              {sliderImages.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, currentImgIndex === i ? styles.activeDot : styles.inactiveDot]}
+                />
+              ))}
+            </View>
           </View>
 
           {/* Dashboard Grid */}
@@ -220,7 +258,26 @@ export default function Home() {
                 onPress={() => router.push(item.route)}
               >
                 {item.img ? (
-                  <Image source={item.img} style={styles.fullCardImg} resizeMode="cover" />
+                  <>
+                    <Image source={item.img} style={styles.fullCardImg} resizeMode="contain" />
+                    <View style={styles.cardOverlay}>
+                      <View style={styles.cardTop}>
+                        <Text style={styles.cardTitle} numberOfLines={2}>{t[item.title] || item.title}</Text>
+                      </View>
+
+                      <View style={styles.cardBottom}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          style={styles.cardBtn3D}
+                          onPress={() => router.push(item.route)}
+                        >
+                          <LinearGradient colors={['#4CAF50', '#2E7D32']} style={styles.cardBtn3DInner}>
+                            <Text style={styles.cardBtnText3D}>{t[item.btn] || item.btn}</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
                 ) : (
                   <View style={styles.iconItemInner}>
                     <Text style={styles.iconItemEmoji}>{item.icon}</Text>
@@ -229,6 +286,35 @@ export default function Home() {
                 )}
               </TouchableOpacity>
             ))}
+          </View>
+
+          {/* 📢 Ads Section Placeholder */}
+          <View style={styles.adSectionContainer}>
+            <View style={styles.adHeader}>
+              <View style={styles.sponsoredBadge}>
+                <Text style={styles.sponsoredText}>SPONSORED</Text>
+              </View>
+              <Ionicons name="information-circle-outline" size={14} color="#999" />
+            </View>
+            <TouchableOpacity activeOpacity={0.9} style={styles.adCard}>
+              <LinearGradient 
+                colors={['#E8F5E9', '#F1F8E1']} 
+                start={{ x: 0, y: 0 }} 
+                end={{ x: 1, y: 1 }} 
+                style={styles.adGradient}
+              >
+                <View style={styles.adContent}>
+                  <View style={styles.adIconBox}>
+                    <Ionicons name="megaphone-outline" size={24} color="#1B5E20" />
+                  </View>
+                  <View style={styles.adTextBox}>
+                    <Text style={styles.adTitle}>Promote Your Mission!</Text>
+                    <Text style={styles.adSubTitle}>Feature your brand here to reach our green community.</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#1B5E20" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
 
           {/* 🔴 LIVE Community Notice Board */}
@@ -296,9 +382,9 @@ const SideItem = ({ icon, label, onPress }) => (
 );
 
 const TabItem = ({ icon, label, active, onPress }) => (
-  <TouchableOpacity 
-    style={styles.tabBtn} 
-    onPress={onPress} 
+  <TouchableOpacity
+    style={styles.tabBtn}
+    onPress={onPress}
     activeOpacity={0.7}
     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
   >
@@ -360,25 +446,30 @@ const styles = StyleSheet.create({
   heroImg: { width: '100%', height: '100%' },
   heroOverlay: { position: 'absolute', top: 15, left: 15, backgroundColor: 'rgba(27, 94, 32, 0.6)', padding: 10, borderRadius: 15 },
   welcomeText: { color: '#fff', fontWeight: 'bold' },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 15, marginTop: 15 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingHorizontal: 12, marginTop: 15, gap: 8 },
   gridItem: {
-    width: (width - 45) / 2,
-    height: 180,
+    width: (width - 48) / 3,
+    height: 165,
     backgroundColor: '#fff',
-    borderRadius: 25,
-    padding: 0, // 0 for full image cards
+    borderRadius: 22,
+    padding: 0,
     alignItems: 'center',
-    marginBottom: 15,
-    elevation: 4,
+    marginBottom: 8,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 6 },
     borderWidth: 1,
-    borderColor: '#E8F5E9',
+    borderColor: '#F0F0F0',
+    borderBottomWidth: 6,
+    borderRightWidth: 2,
+    borderBottomColor: '#D1D1D1',
+    borderRightColor: '#D1D1D1',
     overflow: 'hidden'
   },
-  highlightCard: { borderWidth: 0 },
-  fullCardImg: { width: '100%', height: '100%' },
+  highlightCard: { borderNone: true },
+  fullCardImg: { width: '100%', height: '70%', marginTop: 22 },
   iconItemInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 15 },
   iconItemEmoji: { fontSize: 40, marginBottom: 10 },
   iconItemTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
@@ -448,4 +539,146 @@ const styles = StyleSheet.create({
   noticeName: { fontWeight: '800', color: '#1B3C1B', fontSize: 12 },
   noticeText: { fontSize: 12, color: '#333', lineHeight: 18 },
   timeText: { fontSize: 10, color: '#999', marginTop: 2 },
+
+  // Card Overlay Styles
+  cardGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  cardTop: {
+    alignItems: 'center',
+    width: '100%',
+    paddingTop: 4,
+    paddingHorizontal: 5,
+  },
+  cardTitle: {
+    color: '#1B5E20', // Matching nature green theme
+    fontSize: 10,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  cardBottom: {
+    alignItems: 'center',
+    width: '100%',
+    paddingBottom: 6,
+  },
+  cardBtn3D: {
+    width: '85%',
+    height: 30,
+    borderRadius: 15,
+    overflow: 'hidden',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  cardBtn3DInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardBtnText3D: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Pagination Dots
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 4,
+  },
+  activeDot: {
+    backgroundColor: '#1B5E20',
+    width: 16,
+  },
+  inactiveDot: {
+    backgroundColor: '#CCC',
+  },
+  // 📢 Ads Section Styles
+  adSectionContainer: {
+    marginHorizontal: 15,
+    marginBottom: 15,
+    marginTop: 5,
+  },
+  adHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 5,
+  },
+  sponsoredBadge: {
+    backgroundColor: 'rgba(27, 94, 32, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: 'rgba(27, 94, 32, 0.2)',
+  },
+  sponsoredText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1B5E20',
+    letterSpacing: 1,
+  },
+  adCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1,
+    borderColor: '#E8F5E9',
+  },
+  adGradient: {
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+  },
+  adContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  adIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  adTextBox: {
+    flex: 1,
+  },
+  adTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1B5E20',
+    marginBottom: 2,
+  },
+  adSubTitle: {
+    fontSize: 11,
+    color: '#666',
+    lineHeight: 16,
+  },
 });

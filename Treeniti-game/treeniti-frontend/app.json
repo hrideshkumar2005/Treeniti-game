@@ -31,7 +31,23 @@
           "cameraPermission": "The app accesses your camera to let you take photos of your real trees."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-web-browser",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Treeniti to save your tree certificates to your gallery.",
+          "savePhotosPermission": "Allow Treeniti to save your tree certificates to your gallery.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

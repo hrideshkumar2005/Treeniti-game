@@ -22,6 +22,8 @@ export default function AdminDashboard() {
   const [showMsgMgr, setShowMsgMgr] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState({ mood: 'Happy', language: 'English', category: 'General', message: '' });
+  const [showDeletionMgr, setShowDeletionMgr] = useState(false);
+  const [deletionRequests, setDeletionRequests] = useState([]);
 
   React.useEffect(() => {
      fetchAdminDashboard();
@@ -184,6 +186,38 @@ export default function AdminDashboard() {
     } catch(e) {}
   };
 
+  const fetchDeletionRequests = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const res = await fetch(`${BASE_URL}/admin/deletion-requests`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if(data.success) {
+            setDeletionRequests(data.requests);
+            setShowDeletionMgr(true);
+        }
+      } catch (e) {}
+  };
+
+  const processDeletionRequest = async (uid, action) => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        const res = await fetch(`${BASE_URL}/admin/process-deletion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ targetUserId: uid, action })
+        });
+        const data = await res.json();
+        if(data.success) {
+            Alert.alert("Success", data.message);
+            fetchDeletionRequests();
+        } else {
+            Alert.alert("Error", data.error);
+        }
+      } catch (e) {}
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -252,6 +286,11 @@ export default function AdminDashboard() {
             <TouchableOpacity style={[styles.btn, {marginTop: 10, backgroundColor: '#455A64'}]} onPress={() => setShowMsgMgr(true)}>
                 <Ionicons name="chatbubbles" size={20} color="#fff" />
                 <Text style={styles.btnText}>Tree Talking Templates</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.btn, {marginTop: 10, backgroundColor: '#D32F2F'}]} onPress={fetchDeletionRequests}>
+                <Ionicons name="trash" size={20} color="#fff" />
+                <Text style={styles.btnText}>Account Deletion Requests</Text>
             </TouchableOpacity>
         </View>
 
@@ -421,6 +460,38 @@ export default function AdminDashboard() {
                   </ScrollView>
               </View>
           </View>
+      </Modal>
+
+      {/* Deletion Request Manager Modal */}
+      <Modal visible={showDeletionMgr} animationType="slide">
+          <SafeAreaView style={{flex: 1, backgroundColor: '#fff'}}>
+              <View style={styles.header}>
+                  <TouchableOpacity onPress={() => setShowDeletionMgr(false)}><Ionicons name="close" size={28} color="#fff" /></TouchableOpacity>
+                  <Text style={styles.headerTitle}>Deletion Requests</Text>
+                  <View style={{width: 28}} />
+              </View>
+              <ScrollView style={{padding: 20}}>
+                  {deletionRequests.map(r => (
+                      <View key={r._id} style={[styles.lbRow, {flexDirection: 'column', alignItems: 'flex-start', marginBottom: 15, padding: 15, backgroundColor: '#FFF5F5', borderRadius: 10}]}>
+                          <Text style={{fontWeight: 'bold', fontSize: 16, color: '#D32F2F'}}>User: {r.name}</Text>
+                          <Text style={{color: '#666'}}>Mobile: {r.mobile}</Text>
+                          <Text style={{color: '#666', marginTop: 5}}>Requested: {new Date(r.deletionRequest.requestedAt).toLocaleDateString()}</Text>
+                          <Text style={{color: '#333', marginTop: 5, fontStyle: 'italic'}}>Reason: {r.deletionRequest.reason}</Text>
+                          <View style={{flexDirection: 'row', marginTop: 15, width: '100%', gap: 10}}>
+                              <TouchableOpacity onPress={() => processDeletionRequest(r._id, 'approve')} style={[styles.btn, {backgroundColor: '#D32F2F', flex: 1, marginTop: 0}]}>
+                                  <Text style={styles.btnText}>Approve (Block)</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => processDeletionRequest(r._id, 'reject')} style={[styles.btn, {backgroundColor: '#757575', flex: 1, marginTop: 0}]}>
+                                  <Text style={styles.btnText}>Reject</Text>
+                              </TouchableOpacity>
+                          </View>
+                      </View>
+                  ))}
+                  {deletionRequests.length === 0 && (
+                      <Text style={{textAlign: 'center', color: '#666', marginTop: 20}}>No pending deletion requests.</Text>
+                  )}
+              </ScrollView>
+          </SafeAreaView>
       </Modal>
 
     </SafeAreaView>

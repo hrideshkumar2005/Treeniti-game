@@ -280,7 +280,7 @@ export default function MissionsScreen() {
           {missions.map(mission => (
              <MissionCard 
                key={mission.id}
-               icon={mission.id === 'WATER_TREE' ? 'faucet' : mission.id === 'READ_ARTICLE' ? 'book-open' : 'calendar-check'} 
+               icon={mission.id === 'WATER_TREE' ? 'faucet' : mission.id === 'READ_ARTICLE' ? 'book-open' : mission.id === 'SHAKE_TREE' ? 'hand-rock' : 'calendar-check'} 
                title={mission.title} 
                sub={mission.completed ? "Completed!" : mission.current !== undefined ? `${mission.current}/${mission.target}` : "Active"}
                reward={mission.reward} 
@@ -292,6 +292,8 @@ export default function MissionsScreen() {
                     return;
                   } else if (mission.id === 'WATER_TREE') {
                     Alert.alert("💧 Mission", "Water your tree 2 times from the Plant screen to complete this!");
+                  } else if (mission.id === 'SHAKE_TREE') {
+                    Alert.alert("🤝 Mission", "Play the Shake Tree game once from the Plant screen to complete this!");
                   } else if (mission.id === 'SPIN_WHEEL') {
                     Alert.alert("🎡 Mission", "Spin the Lucky Wheel above 4 times to claim this reward!");
                   } else if (mission.id === 'READ_ARTICLE') {

@@ -125,6 +125,38 @@ export default function ProfileScreen() {
     } catch(e) {}
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "🗑️ Delete Account?",
+      "Your deletion request will be sent to the Admin for approval. This action is serious.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Request Deletion", 
+          style: "destructive",
+          onPress: async () => {
+             try {
+                const token = await AsyncStorage.getItem('userToken');
+                const res = await fetch(`${BASE_URL}/auth/request-deletion`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ reason: "User requested deletion from profile screen" })
+                });
+                const data = await res.json();
+                if (data.success) {
+                   Alert.alert("Request Sent", "Your account deletion request is now pending Admin approval.");
+                } else {
+                   Alert.alert("Error", data.error || "Failed to submit request.");
+                }
+             } catch(e) {
+                Alert.alert("Error", "Network error. Try again later.");
+             }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       
@@ -197,6 +229,12 @@ export default function ProfileScreen() {
           {/* --- SAVE BUTTON --- */}
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
             <Text style={styles.saveBtnText}>{t.save}</Text>
+          </TouchableOpacity>
+
+          {/* --- DELETE ACCOUNT --- */}
+          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount}>
+            <Ionicons name="trash-outline" size={16} color="#FF5252" />
+            <Text style={styles.deleteBtnText}>Request Account Deletion</Text>
           </TouchableOpacity>
         </View>
 
@@ -271,6 +309,9 @@ const styles = StyleSheet.create({
 
   saveBtn: { backgroundColor: '#1B5E20', paddingVertical: 18, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 40, width: '100%', elevation: 5 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 30, paddingVertical: 12, gap: 8 },
+  deleteBtnText: { color: '#FF5252', fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' },
 
   bottomTab: {
     position: 'absolute',

@@ -20,6 +20,7 @@ const UserSchema = new mongoose.Schema({
     pesticideStock: { type: Number, default: 2 }, // SRS 3.5 कीटनाशक दवा stock
     isBlocked: { type: Boolean, default: false },
     dailyWaterCount: { type: Number, default: 0 },
+    dailyShakeCount: { type: Number, default: 0 },
     lastLoginDate: { type: Date },
     lastLoginRewardDate: { type: Date }, // LAUNCH SECURITY: Prevent daily login spam
     totalEarnings: { type: Number, default: 0 },
@@ -45,6 +46,11 @@ const UserSchema = new mongoose.Schema({
         timestamp: { type: Date, default: Date.now },
         notes: String
     }],
+    deletionRequest: {
+        status: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+        requestedAt: { type: Date },
+        reason: { type: String }
+    },
     createdAt: { type: Date, default: Date.now }
 });
 

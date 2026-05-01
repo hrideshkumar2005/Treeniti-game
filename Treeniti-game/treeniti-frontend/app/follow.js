@@ -91,14 +91,14 @@ export default function FollowUs() {
     <SafeAreaView style={styles.container}>
       
       {/* --- 🟢 Header --- */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtnCircle}>
           <Ionicons name="arrow-back" size={24} color="#1B5E20" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.followUs || "Follow Us & Earn Extra"}</Text>
+        <Text style={styles.headerTitle}>{t.followUs || "Social Rewards"}</Text>
         <View style={styles.coinBadge}>
-          <FontAwesome5 name="coins" size={12} color="#FBC02D" />
-          <Text style={styles.coinText}> {user?.walletCoins || 0}</Text>
+          <View style={styles.coinDot} />
+          <Text style={styles.coinText}>{user?.walletCoins || 0}</Text>
         </View>
       </View>
 
@@ -106,8 +106,13 @@ export default function FollowUs() {
         
         {/* --- 📢 Missions Header --- */}
         <View style={styles.missionHeaderRow}>
-          <Text style={styles.missionTitle}>{language === 'hi' ? 'सोशल मिशन' : 'Social Missions'}</Text>
-          <Text style={styles.missionCount}>3 {language === 'hi' ? 'कार्य उपलब्ध' : 'TASKS AVAILABLE'}</Text>
+          <View>
+            <Text style={styles.missionTitle}>{language === 'hi' ? 'सोशल मिशन' : 'Social Missions'}</Text>
+            <Text style={styles.missionSub}>Follow our official handles to get instant coins</Text>
+          </View>
+          <View style={styles.countPill}>
+             <Text style={styles.missionCount}>3 TASKS</Text>
+          </View>
         </View>
 
         {/* --- 📝 Mission List --- */}
@@ -198,7 +203,6 @@ const MissionCard = ({ icon, title, reward, onPress, completed, loading, t }) =>
   </View>
 );
 
-// --- Tab Item Helper ---
 const TabItem = ({ icon, label, onPress }) => (
   <TouchableOpacity style={styles.tabBtn} onPress={onPress}>
     <Ionicons name={icon} size={20} color="#fff" />
@@ -207,45 +211,63 @@ const TabItem = ({ icon, label, onPress }) => (
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5FAF5' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, justifyContent: 'space-between' },
-  backBtn: { padding: 5 },
-  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#1B5E20', flex: 1, marginLeft: 10 },
-  coinBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, elevation: 2 },
-  coinText: { fontSize: 13, fontWeight: 'bold', color: '#1B5E20' },
+  container: { flex: 1, backgroundColor: '#F8FAF8' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingBottom: 15, 
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee'
+  },
+  backBtnCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F0F5F0', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: '#1B5E20', flex: 1, marginLeft: 15, letterSpacing: 0.5 },
+  coinBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, borderWidth: 1, borderColor: '#C8E6C9' },
+  coinDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FBC02D', marginRight: 8 },
+  coinText: { fontSize: 14, fontWeight: 'bold', color: '#1B5E20' },
   
-  scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 180 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 180 },
 
-  missionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 25, marginTop: 10 },
-  missionTitle: { fontSize: 24, fontWeight: 'bold', color: '#1B3C1B' },
-  missionCount: { fontSize: 11, fontWeight: 'bold', color: '#666', letterSpacing: 0.5 },
+  missionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  missionTitle: { fontSize: 24, fontWeight: '900', color: '#1B3C1B' },
+  missionSub: { fontSize: 12, color: '#666', marginTop: 4 },
+  countPill: { backgroundColor: '#1B5E20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  missionCount: { fontSize: 10, fontWeight: 'bold', color: '#fff', letterSpacing: 1 },
 
   listContainer: { width: '100%' },
   
-  // --- Mission Card Styles ---
   card: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 50, // Pure rounded pill shape like screenshot
-    padding: 12,
+    borderRadius: 20,
+    padding: 15,
     alignItems: 'center',
-    marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#eee',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 10,
+    elevation: 2,
   },
   iconCircle: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    backgroundColor: '#F0F0F0',
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: '#F9F9F9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+    borderWidth: 1,
+    borderColor: '#f0f0f0'
   },
   cardInfo: { flex: 1 },
-  cardTitle: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#2C3E50', marginBottom: 4 },
   rewardRow: { flexDirection: 'row', alignItems: 'center' },
-  rewardText: { fontSize: 12, fontWeight: 'bold', color: '#8B6B23' }, // Brownish gold
+  rewardText: { fontSize: 13, fontWeight: 'bold', color: '#B8860B' }, 
   
   claimBtn: {
     backgroundColor: '#1B3C1B',

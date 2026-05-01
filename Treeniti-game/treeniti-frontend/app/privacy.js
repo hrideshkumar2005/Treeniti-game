@@ -3,9 +3,11 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PrivacyPolicy() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,7 +19,7 @@ export default function PrivacyPolicy() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.card}>
             <Text style={styles.sectionTitle}>1. Data Collection</Text>
             <Text style={styles.text}>

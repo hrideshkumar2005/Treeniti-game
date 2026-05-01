@@ -25,4 +25,7 @@ router.get('/leaderboard', authMiddleware, treeController.getLeaderboard);
 // Dynamic Chat Bubble Messaging (Language Specific)
 router.post('/message', authMiddleware, treeController.getTreeMessage);
 
+// Ad Rewards
+router.post('/claim-reward/fertilizer', authMiddleware, treeController.claimRewardedFertilizer);
+
 module.exports = router;

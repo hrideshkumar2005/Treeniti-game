@@ -114,7 +114,12 @@ export default function ResourcesScreen() {
             });
             const data = await res.json();
             if (data.success) {
-                setTrees(data.trees || []);
+                const newTrees = data.trees || [];
+                setTrees(newTrees);
+                // Safety: Clamp index if trees decreased
+                if (currentIndex >= newTrees.length && newTrees.length > 0) {
+                    setCurrentIndex(newTrees.length - 1);
+                }
             }
             setLoading(false);
         } catch (e) {
@@ -156,8 +161,12 @@ export default function ResourcesScreen() {
     };
 
     const handleAction = async () => {
-        if (trees.length === 0) return;
-        const treeId = trees[currentIndex]._id;
+        const tree = trees[currentIndex];
+        if (!tree || !tree._id) {
+            Alert.alert("Selection Required", "Please select a valid tree to nourish.");
+            return;
+        }
+        const treeId = tree._id;
         const endpoint = activeTab === 'Water' ? '/tree/water' : '/tree/fertilize';
         
         try {

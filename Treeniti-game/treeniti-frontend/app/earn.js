@@ -132,6 +132,14 @@ export default function EarnMore() {
 
 
           <ActionCard 
+            icon={<MaterialCommunityIcons name="hand-okay" size={26} color="#fff" />}
+            iconBg="#43A047" 
+            title="Shake Tree Challenge"
+            btnText="Play"
+            onPress={() => router.push('/plant')} 
+          />
+
+          <ActionCard 
             icon={<Ionicons name="cart-outline" size={28} color="#444" />}
             iconBg="#CFD8DC" 
             title="Treenit Store"

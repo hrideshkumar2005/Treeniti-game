@@ -58,4 +58,12 @@ router.post('/rewards/social', authMiddleware, antiBotGuard, earningLimitGuard, 
 router.post('/rewards/spin', authMiddleware, antiBotGuard, earningLimitGuard, authController.spinWheel);
 router.post('/rewards/weekly', authMiddleware, antiBotGuard, earningLimitGuard, authController.claimWeeklyLoot);
 
+// --- Account Deletion ---
+router.post('/request-deletion', authMiddleware, authController.requestAccountDeletion);
+
+// --- Admin Only Routes ---
+const adminMiddleware = require('../middlewares/adminMiddleware');
+router.get('/admin/deletion-requests', authMiddleware, adminMiddleware, authController.getDeletionRequests);
+router.post('/admin/process-deletion', authMiddleware, adminMiddleware, authController.processDeletionRequest);
+
 module.exports = router;

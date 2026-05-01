@@ -17,7 +17,14 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
+
+const SOUNDS = {
+  spin: require('../assets/sounds/spin_sound.wav'),
+  win: 'https://www.soundjay.com/misc/sounds/success-fanfare-trumpets-1.mp3',
+  click: 'https://www.soundjay.com/misc/sounds/button-press-1.mp3',
+};
 
 const { width, height } = Dimensions.get('window');
 const WHEEL_SIZE = width * 0.85;
@@ -39,6 +46,44 @@ export default function SpinWheelScreen() {
   const [isSpinning, setIsSpinning] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const rotationState = useRef(0);
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    // Enable audio in silent mode
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      interruptionModeIOS: 1, // InterruptionModeIOS.DoNotMix
+      playsInSilentModeIOS: true,
+      shouldRouteThroughEarpieceAndroid: false,
+      interruptionModeAndroid: 1, // InterruptionModeAndroid.DoNotMix
+    });
+
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
+
+  async function playSound(type) {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+
+      let source;
+      if (type === 'spin') source = SOUNDS.spin;
+      else if (type === 'win') source = typeof SOUNDS.win === 'string' ? { uri: SOUNDS.win } : SOUNDS.win;
+      else if (type === 'click') source = typeof SOUNDS.click === 'string' ? { uri: SOUNDS.click } : SOUNDS.click;
+
+      const { sound } = await Audio.Sound.createAsync(source);
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      console.log("Sound Error:", e);
+    }
+  }
 
   const fetchProfile = async () => {
     try {
@@ -57,6 +102,7 @@ export default function SpinWheelScreen() {
   const handleSpin = async () => {
     if (isSpinning) return;
     
+    playSound('click');
     // Haptic start
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -74,6 +120,8 @@ export default function SpinWheelScreen() {
       }
 
       setIsSpinning(true);
+      playSound('spin');
+
       const rewardValue = data.wonCoins;
       let targetIndex = REWARDS.findIndex(r => r.value === rewardValue);
       if (targetIndex === -1) targetIndex = 0;
@@ -87,11 +135,12 @@ export default function SpinWheelScreen() {
 
       Animated.timing(spinAnim, {
         toValue: targetDeg,
-        duration: 5000,
+        duration: 4000,
         easing: Easing.bezier(0.15, 0, 0, 1),
         useNativeDriver: true,
       }).start(() => {
         setIsSpinning(false);
+        if (rewardValue > 0) playSound('win');
         rotationState.current = targetDeg;
         
         // Success haptics
