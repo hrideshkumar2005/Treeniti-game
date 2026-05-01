@@ -195,7 +195,10 @@ export default function Home() {
             <Ionicons name="menu-outline" size={32} color="#1B5E20" />
           </TouchableOpacity>
           <View style={styles.headerRight}>
-            <View style={styles.coinBadge}><Text style={styles.coinText}>{userData.coins}</Text></View>
+            <View style={styles.coinBadge}>
+              <FontAwesome5 name="coins" size={14} color="#1B5E20" style={{ marginRight: 6 }} />
+              <Text style={styles.coinText}>{userData.coins}</Text>
+            </View>
             <TouchableOpacity style={styles.referBadge} onPress={() => router.push('/referral_team')}>
               <Ionicons name="git-network-outline" size={14} color="#1B5E20" />
               <Text style={styles.referText}>{t.refer}</Text>
@@ -437,8 +440,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F8F4' },
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12, alignItems: 'center', backgroundColor: '#F4F8F4' },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  coinBadge: { backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2 },
-  coinText: { fontWeight: 'bold', color: '#333' },
+  coinBadge: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2, alignItems: 'center' },
+  coinText: { fontWeight: 'bold', color: '#1B5E20' },
   referBadge: { flexDirection: 'row', backgroundColor: '#E8F5E9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, alignItems: 'center' },
   referText: { fontSize: 12, fontWeight: 'bold', color: '#1B5E20', marginLeft: 4 },
   profileImg: { width: 35, height: 35, borderRadius: 17.5 },

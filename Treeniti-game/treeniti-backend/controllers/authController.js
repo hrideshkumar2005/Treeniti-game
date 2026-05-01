@@ -335,14 +335,19 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
     try {
         const { name, language, avatar } = req.body;
+        console.log(`👤 Updating profile for user: ${req.user.userId}`, { name, language });
         const user = await User.findById(req.user.userId);
-        if (!user) return res.status(404).json({ error: "User not found" });
+        if (!user) {
+            console.error(`❌ User not found in DB: ${req.user.userId}`);
+            return res.status(404).json({ error: "User not found" });
+        }
 
         if (name) user.name = name;
         if (language) user.language = language;
         if (avatar) user.avatar = avatar;
 
         await user.save();
+        console.log(`✅ Profile updated successfully for ${user.mobile}`);
         res.json({ success: true, message: "Profile updated successfully", user });
     } catch (err) {
         res.status(500).json({ error: err.message });

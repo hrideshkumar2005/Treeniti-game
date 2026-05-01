@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname } from 'expo-router';
@@ -167,7 +167,7 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.headerRight}>
           <View style={styles.coinBadge}>
-            <View style={styles.coinDot} />
+            <FontAwesome5 name="coins" size={14} color="#1B5E20" style={{ marginRight: 6 }} />
             <Text style={styles.coinText}>{userData.walletCoins}</Text>
           </View>
         </View>
@@ -281,9 +281,8 @@ const styles = StyleSheet.create({
   miniAvatar: { width: 35, height: 35, borderRadius: 17.5, marginRight: 10 },
   brandText: { fontSize: 18, fontWeight: 'bold', color: '#1B5E20', letterSpacing: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  coinBadge: { backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2 },
-  coinDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#1B5E20', marginRight: 6 },
-  coinText: { fontWeight: 'bold', color: '#333' },
+  coinBadge: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2, alignItems: 'center' },
+  coinText: { fontWeight: 'bold', color: '#1B5E20' },
 
   scrollContent: { alignItems: 'center', paddingBottom: 150, paddingTop: 30 },
   avatarWrapper: { position: 'relative' },
