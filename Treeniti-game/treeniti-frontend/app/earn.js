@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Dimensions, ScrollView, Alert
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
 
@@ -134,9 +135,9 @@ export default function EarnMore() {
           <ActionCard 
             icon={<MaterialCommunityIcons name="hand-okay" size={26} color="#fff" />}
             iconBg="#43A047" 
-            title="Shake Tree Challenge"
+            title="Shake Tree Game"
             btnText="Play"
-            onPress={() => router.push('/plant')} 
+            onPress={() => router.push('/plant?action=shake')} 
           />
 
           <ActionCard 
@@ -173,18 +174,25 @@ export default function EarnMore() {
           </View>
       </Modal>
 
-      {/* Optimized Fixed Bottom Navbar */}
+      {/* --- 🟢 Optimized Docked Navbar --- */}
       <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
-        <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
-        <TabItem icon="water-outline" label="Water" onPress={() => router.push('/plant')} />
-        <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
-          <View style={styles.centerBtnInner}>
-            <Ionicons name="camera" size={26} color="#fff" />
-            <Text style={styles.centerText}>UPLOAD</Text>
-          </View>
-        </TouchableOpacity>
-        <TabItem icon="leaf-outline" label="Fertilize" onPress={() => router.push('/plant')} />
-        <TabItem icon="cash" label="Earn" active={true} onPress={() => {}} />
+        <TabItem icon="home" label="Home" onPress={() => router.push('/home')} />
+        <TabItem icon="water-outline" label="Add Water" onPress={() => router.push('/plant')} />
+
+        <View style={styles.centerCol}>
+          <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
+            <LinearGradient
+              colors={['#4CAF50', '#1B5E20']}
+              style={styles.centerBtnInner}
+            >
+              <Ionicons name="camera" size={22} color="#fff" style={{ marginBottom: 1 }} />
+              <Text style={styles.centerText}>UPLOAD</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        <TabItem icon="leaf-outline" label="Add Fertilizer" onPress={() => router.push('/plant')} />
+        <TabItem icon="gift-outline" label="Earn More" active={true} onPress={() => {}} />
       </View>
     </SafeAreaView>
   );
@@ -207,14 +215,14 @@ const ActionCard = ({ icon, iconBg, title, btnText, onPress }) => (
 );
 
 const TabItem = ({ icon, label, active, onPress }) => (
-  <TouchableOpacity 
-    style={styles.tabBtn} 
+  <TouchableOpacity
+    style={styles.tabBtn}
     onPress={onPress}
     activeOpacity={0.7}
     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
   >
-    <View style={[styles.tabIconCircle, active && { backgroundColor: '#fff' }]}>
-      <Ionicons name={icon} size={20} color={active ? "#1B5E20" : "#fff"} />
+    <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
+      <Ionicons name={icon} size={24} color={active ? "#1B5E20" : "#fff"} />
     </View>
     <Text style={styles.tabLabel}>{label}</Text>
   </TouchableOpacity>
@@ -237,13 +245,29 @@ const styles = StyleSheet.create({
   rewardText: { fontSize: 12, fontWeight: 'bold', color: '#8B6B23' }, 
   actionBtn: { backgroundColor: '#1B3C1B', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, minWidth: 80, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  bottomTab: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#6DBE71', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopLeftRadius: 25, borderTopRightRadius: 25, elevation: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10 },
-  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  tabIconCircle: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 1, fontWeight: '700', textAlign: 'center' },
-  centerBtn: { marginTop: -20, alignItems: 'center' },
-  centerBtnInner: { width: 54, height: 54, backgroundColor: '#1B3C1B', borderRadius: 27, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#F4F8F4' },
-  centerText: { fontSize: 6.5, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -1 },
+  bottomTab: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: '#1B5E20',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10
+  },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+  tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  activeTabIcon: { backgroundColor: '#fff' },
+  tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+  centerBtn: { marginTop: -22, alignItems: 'center' },
+  centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { width: '85%', maxHeight: '70%', backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center' },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#1B5E20' },

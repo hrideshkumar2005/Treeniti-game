@@ -11,17 +11,20 @@ export default function Splash() {
     const checkSession = async () => {
       try {
         const token = await AsyncStorage.getItem('userToken');
+        const langChosen = await AsyncStorage.getItem('languageSelected');
         
         // 🔒 AUTH CHECK: Redirect to home if token exists, else to login.
         setTimeout(() => {
-          if (token && token !== 'DEV_BYPASS_TOKEN') {
-            router.replace('/home');
+          if (!langChosen) {
+             router.replace('/language_select');
+          } else if (token && token !== 'DEV_BYPASS_TOKEN') {
+             router.replace('/home');
           } else {
-            router.replace('/login');
+             router.replace('/login');
           }
         }, 2000);
       } catch (e) {
-        router.replace('/login');
+        router.replace('/language_select');
       }
     };
     checkSession();

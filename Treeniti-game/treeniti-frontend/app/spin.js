@@ -44,6 +44,8 @@ export default function SpinWheelScreen() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [adPlaying, setAdPlaying] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(5);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const rotationState = useRef(0);
   const soundRef = useRef(null);
@@ -65,6 +67,26 @@ export default function SpinWheelScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let timer;
+    if (adPlaying && adCountdown > 0) {
+      timer = setTimeout(() => {
+        setAdCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (adPlaying && adCountdown === 0) {
+      setAdPlaying(false);
+      setTimeout(() => {
+        handleSpin(true);
+      }, 300);
+    }
+    return () => clearTimeout(timer);
+  }, [adPlaying, adCountdown]);
+
+  const triggerAdWatch = () => {
+    setAdPlaying(true);
+    setAdCountdown(5);
+  };
 
   async function playSound(type) {
     try {
@@ -99,8 +121,9 @@ export default function SpinWheelScreen() {
 
   useFocusEffect(useCallback(() => { fetchProfile(); }, []));
 
-  const handleSpin = async () => {
+  const handleSpin = async (watchAd = false) => {
     if (isSpinning) return;
+    const isAd = watchAd === true;
     
     playSound('click');
     // Haptic start
@@ -110,11 +133,26 @@ export default function SpinWheelScreen() {
       const token = await AsyncStorage.getItem('userToken');
       const res = await fetch(`${BASE_URL}/auth/rewards/spin`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ watchAd: isAd })
       });
       const data = await res.json();
 
       if (!data.success) {
+        if (data.adRequired) {
+          Alert.alert(
+            "🎰 Limit / Cooldown Active",
+            data.error,
+            [
+              { text: "Watch Video Ad 🎥", onPress: () => triggerAdWatch() },
+              { text: "Cancel", style: "cancel" }
+            ]
+          );
+          return;
+        }
         Alert.alert("Limit Reached", data.error || "You have used all spins for today!");
         return;
       }
@@ -168,7 +206,7 @@ export default function SpinWheelScreen() {
 
   return (
     <View style={styles.container}>
-      <ImageBackground source={require('../assets/image.png')} style={styles.bg} imageStyle={{ opacity: 0.15 }}>
+      <ImageBackground source={require('../assets/image.jpg')} style={styles.bg} imageStyle={{ opacity: 0.15 }}>
         <SafeAreaView style={styles.safeArea}>
           
           {/* Header */}
@@ -190,8 +228,14 @@ export default function SpinWheelScreen() {
             
             {/* Spins Left Counter */}
             <View style={styles.spinsLeftBox}>
-                <Text style={styles.spinsLeftText}>Spins Left Today: </Text>
-                <Text style={styles.spinsLeftNum}>{Math.max(0, 4 - (user?.dailySpinCount || 0))}</Text>
+                {user?.dailySpinCount >= 2 ? (
+                  <Text style={styles.spinsLeftText}>🎥 AD SPIN ACTIVE</Text>
+                ) : (
+                  <>
+                    <Text style={styles.spinsLeftText}>Free Spins Left Today: </Text>
+                    <Text style={styles.spinsLeftNum}>{2 - (user?.dailySpinCount || 0)}</Text>
+                  </>
+                )}
             </View>
 
             <View style={styles.wheelWrapper}>
@@ -240,6 +284,28 @@ export default function SpinWheelScreen() {
           </View>
         </SafeAreaView>
       </ImageBackground>
+
+      {/* 🎥 Full-screen Gamified Ad Player Overlay */}
+      {adPlaying && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="auto">
+          <LinearGradient
+            colors={['rgba(0,0,0,0.95)', 'rgba(27,94,32,0.98)']}
+            style={styles.adFullscreenContainer}
+          >
+            <View style={styles.adBox}>
+              <MaterialCommunityIcons name="play-circle" size={80} color="#FFD700" style={styles.adIconAnim} />
+              <Text style={styles.adTitle}>SPONSOR VIDEO AD</Text>
+              <Text style={styles.adSub}>Reward unlocked in: <Text style={styles.adTimerText}>{adCountdown}s</Text></Text>
+              
+              <View style={styles.adProgressBarContainer}>
+                <View style={[styles.adProgressBarFill, { width: `${(adCountdown / 5) * 100}%` }]} />
+              </View>
+
+              <Text style={styles.adFooter}>Please do not close the ad to claim your Spin!</Text>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
     </View>
   );
 }
@@ -303,4 +369,61 @@ const styles = StyleSheet.create({
   infoCard: { width: width * 0.85, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 20, marginTop: 50, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   infoText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  adFullscreenContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999999,
+    elevation: 999999,
+  },
+  adBox: {
+    width: '85%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 30,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  adIconAnim: {
+    marginBottom: 20,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowRadius: 15,
+  },
+  adTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  adSub: {
+    color: '#a5d6a7',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 25,
+  },
+  adTimerText: {
+    color: '#FFD700',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  adProgressBarContainer: {
+    width: '100%',
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 30,
+  },
+  adProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#FFD700',
+  },
+  adFooter: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  }
 });

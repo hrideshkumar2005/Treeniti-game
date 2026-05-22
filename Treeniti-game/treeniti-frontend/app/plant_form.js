@@ -10,7 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  StatusBar
+  StatusBar,
+  Modal,
+  LayoutAnimation,
+  UIManager
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,20 +23,40 @@ import BASE_URL from '../config/api';
 
 const { width, height } = Dimensions.get('window');
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function PlantForm() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
+  // Custom Alert Modal States
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    type: 'success', // 'success', 'limit', 'error'
+    title: '',
+    message: '',
+    buttonText: 'OK',
+    onPress: null
+  });
+
+  const showCustomAlert = (type, title, message, buttonText, onPress) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    setAlertConfig({ type, title, message, buttonText, onPress });
+    setAlertVisible(true);
+  };
+
   const handlePlantSeed = async () => {
     if (!name.trim()) {
-        Alert.alert("Name Required", "Please give your new plant a name!");
+        showCustomAlert('error', 'Name Required 🏷️', 'Please give your new plant a name to start its journey!', 'GOT IT', null);
         return;
     }
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        Alert.alert("Not Logged In", "You must be logged in to plant a tree.");
+        showCustomAlert('error', 'Authentication Error 🔐', 'You must be logged in to plant a tree.', 'LOGIN', () => router.replace('/login'));
         return;
       }
 
@@ -49,21 +72,31 @@ export default function PlantForm() {
       const data = await response.json();
 
       if (data.success) {
-        Alert.alert("🌱 SUCCESS!", `Your shiny new tree "${data.tree.treeName}" seed has been planted!`, [
-            { text: "AWESOME!", onPress: () => router.replace('/plant') }
-        ]);
+        showCustomAlert(
+          'success',
+          '🌱 PLANTED!',
+          `Your shiny new tree seed "${data.tree.treeName}" has been successfully planted in your digital garden!`,
+          'AWESOME!',
+          () => router.replace('/plant')
+        );
       } else {
-        Alert.alert("Limit Reached", data.error || "You cannot plant more trees right now.");
+        showCustomAlert(
+          'limit',
+          '🔒 LIMIT REACHED',
+          data.error || "You have reached the maximum active virtual tree limit (2 trees). Grow one of your active trees to a 'Mature Tree' first!",
+          'UNDERSTOOD',
+          null
+        );
       }
     } catch (e) {
-      Alert.alert("Network Error", "Unable to connect to backend server.");
+      showCustomAlert('error', 'Network Error 🌐', 'Unable to connect to the backend server. Please check your internet connection.', 'TRY AGAIN', null);
     }
   };
 
   return (
     <View style={styles.mainContainer}>
       <StatusBar barStyle="light-content" />
-      <ImageBackground source={require('../assets/image.png')} style={styles.bgImage} blurRadius={Platform.OS === 'ios' ? 10 : 5}>
+      <ImageBackground source={require('../assets/image.jpg')} style={styles.bgImage} blurRadius={Platform.OS === 'ios' ? 10 : 5}>
         <LinearGradient colors={['rgba(0,40,0,0.8)', 'rgba(0,20,0,0.4)', 'rgba(0,0,0,0.9)']} style={styles.overlay}>
           
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flexContainer}>
@@ -122,6 +155,80 @@ export default function PlantForm() {
           </KeyboardAvoidingView>
         </LinearGradient>
       </ImageBackground>
+
+      {/* --- GORGEOUS PREMIUM ALERT MODAL --- */}
+      <Modal visible={alertVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBgBlur} />
+          
+          <View style={[
+            styles.modalContentCard,
+            alertConfig.type === 'success' ? styles.borderSuccess :
+            alertConfig.type === 'limit' ? styles.borderLimit : styles.borderError
+          ]}>
+            {/* Header Icon */}
+            <View style={[
+              styles.modalIconCircle,
+              alertConfig.type === 'success' ? styles.bgSuccessCircle :
+              alertConfig.type === 'limit' ? styles.bgLimitCircle : styles.bgErrorCircle
+            ]}>
+              <LinearGradient 
+                colors={
+                  alertConfig.type === 'success' ? ['#4CAF50', '#2E7D32'] :
+                  alertConfig.type === 'limit' ? ['#FFA726', '#E65100'] : ['#EF5350', '#C62828']
+                } 
+                style={styles.modalIconCircleInner}
+              >
+                <Ionicons 
+                  name={
+                    alertConfig.type === 'success' ? 'checkmark-circle' :
+                    alertConfig.type === 'limit' ? 'lock-closed' : 'alert-circle'
+                  } 
+                  size={38} 
+                  color="#fff" 
+                />
+              </LinearGradient>
+            </View>
+
+            {/* Title */}
+            <Text style={[
+              styles.modalTitle,
+              alertConfig.type === 'success' ? styles.colorSuccess :
+              alertConfig.type === 'limit' ? styles.colorLimit : styles.colorError
+            ]}>
+              {alertConfig.title}
+            </Text>
+
+            {/* Message */}
+            <Text style={styles.modalMessage}>{alertConfig.message}</Text>
+
+            {/* Premium Button */}
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              style={styles.modalActionBtn}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setAlertVisible(false);
+                if (alertConfig.onPress) {
+                  alertConfig.onPress();
+                }
+              }}
+            >
+              <LinearGradient 
+                colors={
+                  alertConfig.type === 'success' ? ['#2E7D32', '#1B5E20'] :
+                  alertConfig.type === 'limit' ? ['#E65100', '#BF360C'] : ['#C62828', '#B71C1C']
+                } 
+                start={{x:0, y:0}} end={{x:1, y:0}}
+                style={styles.modalActionBtnInner}
+              >
+                <Text style={styles.modalActionBtnText}>{alertConfig.buttonText}</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -187,5 +294,92 @@ const styles = StyleSheet.create({
   plantBtnInner: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
   plantBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 2 },
 
-  limitHint: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', marginTop: 20 }
+  limitHint: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', marginTop: 20 },
+
+  // --- PREMIUM ALERT MODAL STYLES ---
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.85)'
+  },
+  modalBgBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,30,0,0.15)'
+  },
+  modalContentCard: {
+    width: width - 50,
+    backgroundColor: '#151D15',
+    borderRadius: 30,
+    paddingVertical: 35,
+    paddingHorizontal: 25,
+    alignItems: 'center',
+    borderWidth: 2,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 }
+  },
+  borderSuccess: { borderColor: '#4CAF50' },
+  borderLimit: { borderColor: '#FFA726' },
+  borderError: { borderColor: '#EF5350' },
+  
+  modalIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    padding: 3,
+    marginBottom: 20
+  },
+  bgSuccessCircle: { backgroundColor: 'rgba(76,175,80,0.2)' },
+  bgLimitCircle: { backgroundColor: 'rgba(255,167,38,0.2)' },
+  bgErrorCircle: { backgroundColor: 'rgba(239,83,80,0.2)' },
+  
+  modalIconCircleInner: {
+    flex: 1,
+    borderRadius: 37,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: 15
+  },
+  colorSuccess: { color: '#81C784' },
+  colorLimit: { color: '#FFB74D' },
+  colorError: { color: '#E57373' },
+  
+  modalMessage: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 30,
+    paddingHorizontal: 10
+  },
+  
+  modalActionBtn: {
+    width: '100%',
+    height: 55,
+    borderRadius: 18,
+    overflow: 'hidden'
+  },
+  modalActionBtnInner: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8
+  },
+  modalActionBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2
+  }
 });

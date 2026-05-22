@@ -11,11 +11,13 @@ import {
     Animated,
     Easing,
     Modal,
-    Platform
+    Platform,
+    LayoutAnimation,
+    UIManager
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams, usePathname } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
@@ -23,6 +25,10 @@ import * as Haptics from 'expo-haptics';
 import BASE_URL from '../config/api';
 
 const { width, height } = Dimensions.get('window');
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const STAGE_IMAGES = {
     'Seed': require('../assets/tree_seed.png'),
@@ -39,15 +45,17 @@ const GROWTH_STAGES = [
     { key: 'Seed', emoji: '🌰', label: 'Seed', labelHi: 'बीज', size: width * 0.45 },
     { key: 'Sprout', emoji: '🌱', label: 'Sprout', labelHi: 'अंकुर', size: width * 0.58 },
     { key: 'Plant', emoji: '🌿', label: 'Plant', labelHi: 'पौधा', size: width * 0.72 },
+    { key: 'Growing Plant', emoji: '🌿', label: 'Growing', labelHi: 'बड़ा पौधा', size: width * 0.90 },
     { key: 'Young Tree', emoji: '🌳', label: 'Sapling', labelHi: 'पेड़', size: width * 1.15 },
     { key: 'Mature Tree', emoji: '🌲', label: 'Tree', labelHi: 'वृक्ष', size: width * 1.00 },
     { key: 'Mature Tree (Harvest)', emoji: '🍎', label: 'Harvest', labelHi: 'फल', size: width * 1.30 },
 ];
 
-// 🔇 Sound URLs — set to null to disable until local audio files are added.
-// To enable: add mp3 files to assets/sounds/ and use require('../assets/sounds/water.mp3')
+// 🎵 Local Sound Effects
 const SOUNDS = {
-    water: 'https://www.soundjay.com/misc/sounds/water-pour-1.mp3',
+    water: require('../assets/sounds/water.mp3'),
+    fertilizer: require('../assets/sounds/fertilizer.mp3'),
+    shake: require('../assets/sounds/shaketree.mpeg'),
     coin: 'https://www.soundjay.com/misc/sounds/coin-spade-1.mp3',
     success: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3',
     tap: 'https://www.soundjay.com/misc/sounds/button-press-1.mp3',
@@ -75,34 +83,58 @@ const Particle = ({ type, xPos, startY, onFinish, scale = 1 }) => {
     const initialY = startY !== undefined ? startY : height * 0.4;
     const anim = useRef(new Animated.Value(initialY)).current;
     const rotate = useRef(new Animated.Value(0)).current;
+    const opacity = useRef(new Animated.Value(1)).current;
+    
     useEffect(() => {
-        Animated.parallel([
+        const fallDuration = (type === 'water' || type === 'fertilizer') ? 700 + Math.random() * 200 : 900 + Math.random() * 500;
+        
+        const animations = [
             Animated.timing(anim, {
-                toValue: height * 0.78,
-                duration: 900 + Math.random() * 500,
+                toValue: (type === 'water' || type === 'fertilizer') ? height * 0.88 : height * 0.78,
+                duration: fallDuration,
                 useNativeDriver: true,
-                easing: Easing.bounce
+                easing: (type === 'water' || type === 'fertilizer') ? Easing.in(Easing.quad) : Easing.bounce
             }),
             Animated.timing(rotate, {
-                toValue: Math.random() > 0.5 ? 2 : -2,
+                toValue: (type === 'water' || type === 'fertilizer') ? 0 : (Math.random() > 0.5 ? 2 : -2),
                 duration: 1000,
                 useNativeDriver: true,
             })
-        ]).start(() => onFinish());
+        ];
+
+        if (type === 'water' || type === 'fertilizer') {
+            animations.push(
+                Animated.sequence([
+                    Animated.delay(fallDuration - 200),
+                    Animated.timing(opacity, {
+                        toValue: 0,
+                        duration: 200,
+                        useNativeDriver: true
+                    })
+                ])
+            );
+        }
+
+        Animated.parallel(animations).start(() => onFinish());
     }, []);
 
     const spin = rotate.interpolate({ inputRange: [-2, 0, 2], outputRange: ['-720deg', '0deg', '720deg'] });
 
     return (
-        <Animated.View style={[styles.particle, { left: xPos, transform: [{ translateY: anim }, { rotate: spin }, { scale }] }]}>
-            {type === 'coin'
-                ? <FontAwesome5 name="coins" size={24} color="#FFD700" />
-                : (
-                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                         <Text style={{ fontSize: 32 }}>🍎</Text>
-                         <View style={[styles.fruitGloss, { top: 4, right: 4, width: 8, height: 8 }]} />
-                    </View>
-                )}
+        <Animated.View style={[styles.particle, { left: xPos, opacity, transform: [{ translateY: anim }, { rotate: spin }, { scale }] }]}>
+            {type === 'coin' && <FontAwesome5 name="coins" size={24} color="#FFD700" />}
+            {type === 'fruit' && (
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                     <Text style={{ fontSize: 32 }}>🍎</Text>
+                     <View style={[styles.fruitGloss, { top: 4, right: 4, width: 8, height: 8 }]} />
+                </View>
+            )}
+            {type === 'water' && (
+                <Ionicons name="water" size={32} color="#00E5FF" style={{ textShadowColor: 'rgba(0, 176, 255, 0.6)', textShadowRadius: 6 }} />
+            )}
+            {type === 'fertilizer' && (
+                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#8D6E63', borderWidth: 1, borderColor: '#5D4037', shadowColor: '#4E342E', shadowOpacity: 0.8, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } }} />
+            )}
         </Animated.View>
     );
 };
@@ -185,7 +217,7 @@ const ForestElement = ({ type, delay = 0 }) => {
 };
 
 // 🌸 Flowers for the Tree
-const Flower = ({ x, y }) => {
+const Flower = React.memo(function Flower({ x, y }) {
     const scale = useRef(new Animated.Value(0)).current;
     useEffect(() => {
         Animated.spring(scale, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
@@ -195,10 +227,10 @@ const Flower = ({ x, y }) => {
             <Text style={{ fontSize: 16 }}>🌸</Text>
         </Animated.View>
     );
-};
+});
 
 // 🍎 Fruits for the Tree
-const FruitOnTree = ({ x, y }) => {
+const FruitOnTree = React.memo(function FruitOnTree({ x, y }) {
     const scale = useRef(new Animated.Value(0)).current;
     useEffect(() => {
         Animated.spring(scale, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
@@ -208,11 +240,14 @@ const FruitOnTree = ({ x, y }) => {
             <Text style={{ fontSize: 20 }}>🍎</Text>
         </Animated.View>
     );
-};
+});
 
 export default function GameHomeScreen() {
     const router = useRouter();
+    const pathname = usePathname();
     const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
+    const hasAutoStartedShake = useRef(false);
 
     const [trees, setTrees] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -228,8 +263,6 @@ export default function GameHomeScreen() {
 
     const [showAdModal, setShowAdModal] = useState(false);
     const [adCountdown, setAdCountdown] = useState(5);
-    const [showWaterRewardModal, setShowWaterRewardModal] = useState(false);
-    const [showFertilizerRewardModal, setShowFertilizerRewardModal] = useState(false);
     const adTimerRef = useRef(null);
     const adCallbackRef = useRef(null);
 
@@ -256,6 +289,8 @@ export default function GameHomeScreen() {
     const [shakeCount, setShakeCount] = useState(0);
     const [shakeTimer, setShakeTimer] = useState(10);
     const treeShake = useRef(new Animated.Value(0)).current;
+    const waterCanAnim = useRef(new Animated.Value(0)).current;
+    const fertilizerAnim = useRef(new Animated.Value(0)).current;
 
     const currentTree = trees[currentIndex] || {};
 
@@ -280,6 +315,8 @@ export default function GameHomeScreen() {
     }, [currentTree.level]);
 
     const waterPlayer = useAudioPlayer(SOUNDS.water);
+    const fertilizerPlayer = useAudioPlayer(SOUNDS.fertilizer);
+    const shakePlayer = useAudioPlayer(SOUNDS.shake);
     const coinPlayer = useAudioPlayer(SOUNDS.coin);
     const successPlayer = useAudioPlayer(SOUNDS.success);
     const tapPlayer = useAudioPlayer(SOUNDS.tap);
@@ -298,6 +335,12 @@ export default function GameHomeScreen() {
             if (type === 'water') {
                 waterPlayer.seekTo(0);
                 waterPlayer.play();
+            } else if (type === 'fertilizer') {
+                fertilizerPlayer.seekTo(0);
+                fertilizerPlayer.play();
+            } else if (type === 'shake') {
+                shakePlayer.seekTo(0);
+                shakePlayer.play();
             } else if (type === 'coin') {
                 coinPlayer.seekTo(0);
                 coinPlayer.play();
@@ -311,31 +354,69 @@ export default function GameHomeScreen() {
         } catch (e) { console.log("Sound error:", e); }
     }
 
+    const loadCachedState = async () => {
+        try {
+            const cachedTreesStr = await AsyncStorage.getItem('cached_trees');
+            const cachedTokensStr = await AsyncStorage.getItem('cached_tokens');
+            
+            if (cachedTreesStr) {
+                const parsedTrees = JSON.parse(cachedTreesStr);
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setTrees(parsedTrees);
+            }
+            if (cachedTokensStr) {
+                const parsedTokens = JSON.parse(cachedTokensStr);
+                setTokens(parsedTokens);
+            }
+        } catch (e) {
+            console.log("Error loading cached state:", e);
+        }
+    };
+
     const fetchGameState = async () => {
         try {
             const token = await AsyncStorage.getItem('userToken');
-            const response = await fetch(`${BASE_URL}/tree`, { headers: { 'Authorization': `Bearer ${token}` } });
-            const data = await response.json();
-            if (data.success) {
-                setTrees(data.trees || []);
-                const walletRes = await fetch(`${BASE_URL}/wallet`, { headers: { 'Authorization': `Bearer ${token}` } });
-                const walletData = await walletRes.json();
-                if (walletData.success) {
-                    const currentTreeData = data.trees[currentIndex];
-                    setTokens({
-                        coins: walletData.totalCoins,
-                        growth: currentTreeData?.growth || 0,
-                        fruits: currentTreeData?.fruitsAvailable || 0,
-                        totalFruits: walletData.fruitInventory || 0
-                    });
-                }
+            if (!token) return;
+
+            // Parallel Promise.all cuts waterfall latency by 70%!
+            const [treeRes, profileRes] = await Promise.all([
+                fetch(`${BASE_URL}/tree`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${BASE_URL}/auth/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
+            const [treeData, profileData] = await Promise.all([
+                treeRes.json(),
+                profileRes.json()
+            ]);
+
+            if (treeData.success && profileData.success) {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                const treesList = treeData.trees || [];
+                setTrees(treesList);
+
+                const userObj = profileData.user || {};
+                const currentTreeData = treesList[currentIndex];
+
+                const freshTokens = {
+                    coins: userObj.walletCoins || 0,
+                    growth: currentTreeData?.growth || 0,
+                    fruits: currentTreeData?.fruitsAvailable || 0,
+                    totalFruits: userObj.fruitInventory || 0
+                };
+                setTokens(freshTokens);
+
+                // Save to offline-first cache for instant tab transitions!
+                await AsyncStorage.setItem('cached_trees', JSON.stringify(treesList));
+                await AsyncStorage.setItem('cached_tokens', JSON.stringify(freshTokens));
 
                 // Fetch random tree message
-                if (data.trees[currentIndex]) {
-                    fetchTreeMessage(data.trees[currentIndex]._id);
+                if (currentTreeData?._id) {
+                    fetchTreeMessage(currentTreeData._id);
                 }
             }
-        } catch (e) { console.log(e); }
+        } catch (e) {
+            console.log("Fetch game state error:", e);
+        }
     };
 
     const fetchTreeMessage = async (treeId) => {
@@ -359,114 +440,134 @@ export default function GameHomeScreen() {
         } catch (e) { }
     };
 
-    useFocusEffect(useCallback(() => { fetchGameState(); }, [currentIndex]));
+    useFocusEffect(useCallback(() => {
+        loadCachedState();
+        fetchGameState();
+    }, [currentIndex]));
 
     const startWaterGame = () => {
-        showRewardedAd(() => {
-            // After ad — show congrats modal first
-            setShowWaterRewardModal(true);
+        showRewardedAd(async () => {
+            const treeId = trees[currentIndex]?._id;
+            if (!treeId) return;
+
+            try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const token = await AsyncStorage.getItem('userToken');
+                const res = await fetch(`${BASE_URL}/tree/water`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ treeId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    triggerWateringAnimation();
+                    setTimeout(() => {
+                        addFeedback("PERFECT! Watered");
+                        fetchGameState();
+                    }, 3500);
+                } else {
+                    Alert.alert("Notice", data.error || "Failed to water the tree.");
+                }
+            } catch (error) {
+                console.error("Water tree error:", error);
+                Alert.alert("Error", "Connectivity issue while watering your tree.");
+            }
         });
     };
 
     const startFertilizerFlow = () => {
         showRewardedAd(async () => {
+            const treeId = trees[currentIndex]?._id;
+            if (!treeId) return;
             try {
                 const token = await AsyncStorage.getItem('userToken');
-                const res = await fetch(`${BASE_URL}/tree/claim-reward/fertilizer`, {
+                
+                // Optional: Claim fertilizer first if needed
+                await fetch(`${BASE_URL}/tree/claim-reward/fertilizer`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
+                // Immediately fertilize the tree
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                const res = await fetch(`${BASE_URL}/tree/fertilize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ treeId })
+                });
                 const data = await res.json();
                 if (data.success) {
-                    setShowFertilizerRewardModal(true);
-                } else {
-                    Alert.alert("Error", data.error || "Failed to claim reward.");
-                }
-            } catch (e) {
-                Alert.alert("Error", "Connectivity issue while claiming reward.");
-            }
-        });
-    };
-
-    const beginFertilizerUse = async () => {
-        setShowFertilizerRewardModal(false);
-        const treeId = trees[currentIndex]?._id;
-        if (!treeId) return;
-
-        try {
-            const token = await AsyncStorage.getItem('userToken');
-            const res = await fetch(`${BASE_URL}/tree/fertilize`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ treeId })
-            });
-            const data = await res.json();
-            if (data.success) {
-                playSound('success');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                addFeedback("Fertilized! +Growth Boost");
-                fetchGameState();
-                Alert.alert("✨ Success!", "Your tree has been fertilized and its growth is boosted!");
-            } else {
-                Alert.alert("Notice", data.error);
-            }
-        } catch (e) {
-            Alert.alert("Error", "Check your connection.");
-        }
-    };
-
-    const beginWaterMiniGame = () => {
-        setShowWaterRewardModal(false);
-        setIsWaterGameVisible(true);
-        setIsBarMoving(true);
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(barAnim, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
-                Animated.timing(barAnim, { toValue: 0, duration: 900, easing: Easing.linear, useNativeDriver: true })
-            ])
-        ).start();
-    };
-
-    const handleWaterTap = async () => {
-        if (!isBarMoving) return;
-        setIsBarMoving(false);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-        barAnim.stopAnimation(async (val) => {
-            let accuracy = "MISS";
-            if (val > 0.45 && val < 0.55) { accuracy = "PERFECT"; }
-            else if (val > 0.25 && val < 0.75) { accuracy = "GOOD"; }
-
-            if (accuracy !== "MISS") {
-                try {
-                    if (accuracy === "PERFECT") playSound('success');
-                    else playSound('water');
-                    const token = await AsyncStorage.getItem('userToken');
-                    const res = await fetch(`${BASE_URL}/tree/water`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ treeId: trees[currentIndex]._id })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        addFeedback(`${accuracy}! +20% Growth`);
+                    triggerFertilizerAnimation();
+                    setTimeout(() => {
+                        addFeedback("FERTILIZED! +Growth Boost");
                         fetchGameState();
-                    } else {
-                        Alert.alert("Hold on!", data.error);
-                    }
-                } catch (e) { }
-            } else {
-                Alert.alert("Missed!", "The water missed the roots. Try again!");
+                    }, 3500);
+                } else {
+                    Alert.alert("Notice", data.error || "Failed to fertilize the tree.");
+                }
+            } catch (error) {
+                console.error("Fertilize tree error:", error);
+                Alert.alert("Error", "Connectivity issue while fertilizing your tree.");
             }
-            setTimeout(() => setIsWaterGameVisible(false), 900);
         });
     };
 
 
-    const startShakeGame = () => {
-        // SRS 3.2.2: Shake game is available for established plants
-        const isEligible = ['Plant', 'Young Tree', 'Mature Tree', 'Mature Tree (Harvest)'].includes(currentTree.level);
+    const startShakeGame = async () => {
+        // Daily Limit Check: 2 times per day
+        try {
+            const todayStr = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+            const storedDate = await AsyncStorage.getItem('lastShakeDate');
+            let storedCount = await AsyncStorage.getItem('shakeCountToday');
+            let count = storedCount ? parseInt(storedCount) : 0;
+
+            if (storedDate === todayStr) {
+                if (count >= 2) {
+                    Alert.alert(
+                        "Hold on!",
+                        "You have reached the max daily limit. Please check back tomorrow!",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => {
+                                    if (params?.action === 'shake') {
+                                        router.push('/earn');
+                                    }
+                                }
+                            }
+                        ]
+                    );
+                    return;
+                }
+            } else {
+                count = 0;
+                await AsyncStorage.setItem('lastShakeDate', todayStr);
+            }
+
+            // Save incremented count
+            count += 1;
+            await AsyncStorage.setItem('shakeCountToday', count.toString());
+        } catch (e) {
+            console.log("Shake limit storage error:", e);
+        }
+
+        // SRS 3.2.2: Shake game only available for MATURE trees (after full 21-day growth cycle)
+        const isEligible = ['Mature Tree', 'Mature Tree (Harvest)'].includes(currentTree.level);
         if (!isEligible) {
-            Alert.alert("Too Small!", "Your seedling is too fragile to shake. Grow it into a Plant first!");
+            Alert.alert(
+                "🔒 Tree Not Ready!",
+                `Shake Tree unlocks when your tree reaches 'Mature Tree' stage (90% growth / ~21 days). Keep watering daily!\n\nCurrent: ${currentTree.level} (${Math.round(currentTree.growth || 0)}%)`,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            if (params?.action === 'shake') {
+                                router.push('/earn');
+                            }
+                        }
+                    }
+                ]
+            );
             return;
         }
 
@@ -498,9 +599,19 @@ export default function GameHomeScreen() {
         }, 1000);
     };
 
+    useEffect(() => {
+        if (params?.action === 'shake' && trees.length > 0 && !hasAutoStartedShake.current) {
+            hasAutoStartedShake.current = true;
+            const timer = setTimeout(() => {
+                startShakeGame();
+            }, 600);
+            return () => clearTimeout(timer);
+        }
+    }, [params, trees]);
+
     const handleShakeTap = () => {
         if (!isShakeGameActive) return;
-        playSound('tap');
+        playSound('shake'); // 🌳 shaketree.mpeg sound on every tap
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
         const newCount = shakeCount + 1;
@@ -553,7 +664,20 @@ export default function GameHomeScreen() {
                 body: JSON.stringify({ treeId: trees[currentIndex]._id, hits: shakeCount })
             });
             fetchGameState();
-            Alert.alert("Success!", `Harvested ${Math.floor(shakeCount / 5)} fruits & some bonus coins!`);
+            Alert.alert(
+                "Success!",
+                `Harvested ${Math.floor(shakeCount / 5)} fruits & some bonus coins!`,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            if (params?.action === 'shake') {
+                                router.push('/earn');
+                            }
+                        }
+                    }
+                ]
+            );
         } catch (e) { }
     };
 
@@ -565,6 +689,63 @@ export default function GameHomeScreen() {
                 setParticles(p => [...p.slice(-30), { id, x, startY: height * 0.4, type: 'fruit' }]);
             }, i * 100);
         }
+    };
+
+    const triggerFertilizerAnimation = () => {
+        // Move fertilizer bag in and tilt
+        Animated.sequence([
+            Animated.timing(fertilizerAnim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]).start();
+
+        setTimeout(() => playSound('fertilizer'), 800);
+
+        for (let i = 0; i < 25; i++) {
+            setTimeout(() => {
+                const id = Date.now() + Math.random();
+                const x = (width / 2) + 10 + (Math.random() * 20 - 10);
+                setParticles(p => [...p.slice(-45), { 
+                    id, 
+                    x, 
+                    startY: height * 0.38, 
+                    type: 'fertilizer',
+                    scale: Math.random() * 0.4 + 0.8
+                }]);
+            }, 800 + i * 80);
+        }
+
+        // Move fertilizer bag out
+        setTimeout(() => {
+            Animated.timing(fertilizerAnim, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }).start();
+        }, 800 + 25 * 80 + 300);
+    };
+
+    const triggerWateringAnimation = () => {
+        // Move water can in and tilt
+        Animated.sequence([
+            Animated.timing(waterCanAnim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]).start();
+
+        setTimeout(() => playSound('water'), 800);
+
+        for (let i = 0; i < 25; i++) {
+            setTimeout(() => {
+                const id = Date.now() + Math.random();
+                // Exact position of the watering can nozzle
+                const x = (width / 2) + 10 + (Math.random() * 15 - 7.5);
+                setParticles(p => [...p.slice(-45), { 
+                    id, 
+                    x, 
+                    startY: height * 0.39, 
+                    type: 'water',
+                    scale: Math.random() * 0.3 + 0.7
+                }]);
+            }, 800 + i * 80); // 80ms * 25 drops = 2000ms (2 seconds)
+        }
+
+        // Move water can out
+        setTimeout(() => {
+            Animated.timing(waterCanAnim, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }).start();
+        }, 800 + 25 * 80 + 300);
     };
 
     const handleHarvest = async () => {
@@ -636,91 +817,9 @@ export default function GameHomeScreen() {
                 </LinearGradient>
             </Modal>
 
-            {/* --- 💧 WATER REWARD CONGRATS MODAL --- */}
-            <Modal visible={showWaterRewardModal} transparent animationType="fade" statusBarTranslucent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 }}>
-                    <LinearGradient
-                        colors={['#0d47a1', '#1565C0', '#1976D2']}
-                        style={{ width: '100%', borderRadius: 30, padding: 35, alignItems: 'center', borderWidth: 2, borderColor: 'rgba(100,181,246,0.4)', elevation: 20 }}
-                    >
-                        {/* Glow Circle */}
-                        <View style={{ width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(100,181,246,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(100,181,246,0.5)', marginBottom: 20 }}>
-                            <Text style={{ fontSize: 55 }}>💧</Text>
-                        </View>
 
-                        {/* Title */}
-                        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', letterSpacing: 1, marginBottom: 8 }}>
-                            🎉 Congratulations!
-                        </Text>
 
-                        {/* Reward Message */}
-                        <Text style={{ color: '#90CAF9', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 6 }}>
-                            You earned
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16, backgroundColor: 'rgba(100,181,246,0.15)', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(100,181,246,0.3)' }}>
-                            <Text style={{ fontSize: 30 }}>💧💧</Text>
-                            <Text style={{ color: '#fff', fontSize: 24, fontWeight: '900' }}>2 Drops of Water</Text>
-                        </View>
-
-                        <Text style={{ color: '#90CAF9', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                            Use these water drops to grow{'\n'}your tree and boost its growth! 🌱
-                        </Text>
-
-                        {/* Use Water Button */}
-                        <TouchableOpacity
-                            onPress={beginWaterMiniGame}
-                            style={{ width: '100%', backgroundColor: '#42A5F5', borderRadius: 20, paddingVertical: 16, alignItems: 'center', elevation: 8, shadowColor: '#42A5F5', shadowOpacity: 0.6, shadowRadius: 10 }}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 1 }}>💧 Use Water Now</Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
-                </View>
-            </Modal>
-
-            {/* --- 🌿 FERTILIZER REWARD CONGRATS MODAL --- */}
-            <Modal visible={showFertilizerRewardModal} transparent animationType="fade" statusBarTranslucent>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 }}>
-                    <LinearGradient
-                        colors={['#1B5E20', '#2E7D32', '#388E3C']}
-                        style={{ width: '100%', borderRadius: 30, padding: 35, alignItems: 'center', borderWidth: 2, borderColor: 'rgba(165,214,167,0.4)', elevation: 20 }}
-                    >
-                        {/* Glow Circle */}
-                        <View style={{ width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(165,214,167,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(165,214,167,0.5)', marginBottom: 20 }}>
-                            <Text style={{ fontSize: 55 }}>🌿</Text>
-                        </View>
-
-                        {/* Title */}
-                        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', letterSpacing: 1, marginBottom: 8 }}>
-                            🎉 Congratulations!
-                        </Text>
-
-                        {/* Reward Message */}
-                        <Text style={{ color: '#A5D6A7', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 6 }}>
-                            You earned
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16, backgroundColor: 'rgba(165,214,167,0.15)', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(165,214,167,0.3)' }}>
-                            <Text style={{ fontSize: 30 }}>🌿</Text>
-                            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>1 Bag of Fertilizer</Text>
-                        </View>
-
-                        <Text style={{ color: '#A5D6A7', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                            Use this fertilizer to supercharge{`\n`}your tree's growth! 🚀
-                        </Text>
-
-                        {/* Use Fertilizer Button */}
-                        <TouchableOpacity
-                            onPress={beginFertilizerUse}
-                            style={{ width: '100%', backgroundColor: '#4CAF50', borderRadius: 20, paddingVertical: 16, alignItems: 'center', elevation: 8, shadowColor: '#4CAF50', shadowOpacity: 0.6, shadowRadius: 10 }}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 1 }}>🌿 Use Fertilizer Now</Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
-                </View>
-            </Modal>
-
-            <ImageBackground source={require('../assets/image.png')} style={styles.bg} resizeMode="stretch">
+            <ImageBackground source={require('../assets/image.jpg')} style={styles.bg} resizeMode="stretch">
                 {/* 🍎 FALLING FRUITS/COINS (Visible on main screen during harvest) */}
                 {particles.map(p => (
                     <Particle key={p.id} type={p.type} xPos={p.x} startY={p.startY} onFinish={() => setParticles(pts => pts.filter(x => x.id !== p.id))} />
@@ -751,11 +850,14 @@ export default function GameHomeScreen() {
                                 </View>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={styles.premiumAddBtn} onPress={() => router.push('/plant_form')}>
-                            <View style={styles.addBtnInner}>
-                                <Ionicons name="add" size={26} color="#fff" />
-                            </View>
-                        </TouchableOpacity>
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                            <TouchableOpacity style={styles.premiumAddBtn} onPress={() => router.push('/plant_form')}>
+                                <View style={styles.addBtnInner}>
+                                    <Ionicons name="add" size={18} color="#fff" />
+                                </View>
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 7.5, color: '#fff', fontWeight: 'bold', marginTop: 3, letterSpacing: 0.5 }}>NEW TREE</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -780,12 +882,9 @@ export default function GameHomeScreen() {
                                 )}
                             </View>
                             <Text style={styles.plantStatusDay}>Day {currentTree.daysGrowing || 1} · {currentTree.level || 'Seed'}</Text>
-                            <View style={styles.dailyLimitRow}>
-                                <Text style={styles.dailyLimitText}>Daily Growth: {currentTree.dailyGrowthGained || 0}/4%</Text>
-                            </View>
                         </View>
                         <View style={styles.growthPill}>
-                            <Text style={styles.growthPillText}>{currentTree.growth || 0}%</Text>
+                            <Text style={styles.growthPillText}>{typeof currentTree.growth === 'number' ? Math.round(currentTree.growth) : 0}%</Text>
                         </View>
                     </View>
                 )}
@@ -800,9 +899,18 @@ export default function GameHomeScreen() {
                 </View>
 
                 <View style={styles.rightControlsColumn}>
-                    {['Plant', 'Young Tree', 'Mature Tree', 'Mature Tree (Harvest)'].includes(currentTree.level) && (
-                        <TouchableOpacity style={[styles.verticalGlassBtn, { borderColor: '#FFD700' }]} onPress={startShakeGame}>
-                            <Image source={require('../assets/shake_tree_logo.png')} style={{ width: 130, height: 100, marginTop: 15 }} resizeMode="contain" />
+                    {/* 🌳 Shake Tree: Only visible when tree is Mature */}
+                    {['Mature Tree', 'Mature Tree (Harvest)'].includes(currentTree.level) && (
+                        <TouchableOpacity
+                            style={[styles.verticalGlassBtn, { borderColor: '#FFD700' }]}
+                            onPress={startShakeGame}
+                            activeOpacity={0.7}
+                        >
+                            <Image
+                                source={require('../assets/shake_tree_logo.png')}
+                                style={{ width: 130, height: 100, marginTop: 15 }}
+                                resizeMode="contain"
+                            />
                             <Text style={[styles.verticalBtnLabel, { color: '#FFD700', marginTop: -120 }]}></Text>
                         </TouchableOpacity>
                     )}
@@ -816,6 +924,74 @@ export default function GameHomeScreen() {
                 {/* Spacer to push tree down to the bottom */}
                 <View style={{ flex: 1.3 }} />
 
+                {/* Animated Fertilizer Bag */}
+                <Animated.Image
+                    source={require('../assets/fertlizer_bori.png')}
+                    style={{
+                        position: 'absolute',
+                        width: 140,
+                        height: 140,
+                        zIndex: 300,
+                        top: 0,
+                        left: 0,
+                        transform: [
+                            {
+                                translateX: fertilizerAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [-150, (width / 2) - 60] // From offscreen left to center left
+                                })
+                            },
+                            {
+                                translateY: fertilizerAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [height * 0.15, height * 0.28]
+                                })
+                            },
+                            {
+                                rotate: fertilizerAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ['0deg', '35deg'] // Tilting right
+                                })
+                            }
+                        ]
+                    }}
+                    resizeMode="contain"
+                />
+
+                {/* Animated Watering Can */}
+                <Animated.Image
+                    source={require('../assets/water_can.png')}
+                    style={{
+                        position: 'absolute',
+                        width: 140,
+                        height: 140,
+                        zIndex: 300,
+                        top: 0,
+                        left: 0,
+                        transform: [
+                            {
+                                translateX: waterCanAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [width + 100, (width / 2) - 15]
+                                })
+                            },
+                            {
+                                translateY: waterCanAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [height * 0.15, height * 0.28]
+                                })
+                            },
+                            {
+                                rotate: waterCanAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ['0deg', '-35deg']
+                                })
+                            }
+                        ]
+                    }}
+                    resizeMode="contain"
+                />
+
                 <View style={styles.treeContainer}>
                     {/* 🦋 Dynamic Forest Wildlife */}
                     {forestWildlife.map(el => (
@@ -828,7 +1004,10 @@ export default function GameHomeScreen() {
                             {trees.length > 1 && (
                                 <TouchableOpacity
                                     style={[styles.navArrow, { left: 15 }]}
-                                    onPress={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                                    onPress={() => {
+                                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                        setCurrentIndex(prev => Math.max(0, prev - 1));
+                                    }}
                                     disabled={currentIndex <= 0}
                                 >
                                     <Ionicons name="chevron-back" size={32} color={currentIndex <= 0 ? "rgba(255,255,255,0.2)" : "#FFD700"} />
@@ -870,19 +1049,19 @@ export default function GameHomeScreen() {
                                             <Animated.View style={{ transform: [{ translateX: treeShake }] }}>
                                                 {hasFlowers && (
                                                     <>
-                                                        <Flower x={-40} y={-100} />
-                                                        <Flower x={50} y={-80} />
-                                                        <Flower x={-20} y={-140} />
+                                                        <Flower key="fl-1" x={-40} y={-100} />
+                                                        <Flower key="fl-2" x={50} y={-80} />
+                                                        <Flower key="fl-3" x={-20} y={-140} />
                                                     </>
                                                 )}
 
                                                 {['Mature Tree', 'Mature Tree (Harvest)'].includes(currentTree.level) && (
                                                     <>
-                                                        <FruitOnTree x={-30} y={-110} />
-                                                        <FruitOnTree x={40} y={-90} />
-                                                        <FruitOnTree x={-10} y={-130} />
-                                                        <FruitOnTree x={15} y={-150} />
-                                                        <FruitOnTree x={-50} y={-70} />
+                                                        <FruitOnTree key="fr-1" x={-30} y={-110} />
+                                                        <FruitOnTree key="fr-2" x={40} y={-90} />
+                                                        <FruitOnTree key="fr-3" x={-10} y={-130} />
+                                                        <FruitOnTree key="fr-4" x={15} y={-150} />
+                                                        <FruitOnTree key="fr-5" x={-50} y={-70} />
                                                     </>
                                                 )}
                                             </Animated.View>
@@ -895,7 +1074,10 @@ export default function GameHomeScreen() {
                             {trees.length > 1 && (
                                 <TouchableOpacity
                                     style={[styles.navArrow, { right: 15 }]}
-                                    onPress={() => setCurrentIndex(prev => Math.min(trees.length - 1, prev + 1))}
+                                    onPress={() => {
+                                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                        setCurrentIndex(prev => Math.min(trees.length - 1, prev + 1));
+                                    }}
                                     disabled={currentIndex >= trees.length - 1}
                                 >
                                     <Ionicons name="chevron-forward" size={32} color={currentIndex >= trees.length - 1 ? "rgba(255,255,255,0.2)" : "#FFD700"} />
@@ -918,7 +1100,7 @@ export default function GameHomeScreen() {
                 </View>
 
                 {/* 🌱 GROWTH JOURNEY — floating glass strip */}
-                <View style={styles.stageTrackerCard}>
+                <View style={[styles.stageTrackerCard, { marginBottom: insets.bottom + 12 }]}>
                     <View style={styles.stageRow}>
                         {GROWTH_STAGES.map((stage, index) => {
                             const stageIndex = GROWTH_STAGES.findIndex(s => s.key === (currentTree.level || 'Seed'));
@@ -944,38 +1126,37 @@ export default function GameHomeScreen() {
                             );
                         })}
                     </View>
-                    <View style={styles.growthBarBg}>
-                        <View style={[styles.growthBarFill, {
-                            width: `${((GROWTH_STAGES.findIndex(s => s.key === (currentTree.level || 'Seed')) + 1) / GROWTH_STAGES.length) * 100}%`
-                        }]} />
-                    </View>
+
+                    {/* 📊 Compact Growth Bar */}
+                    {trees.length > 0 && (() => {
+                        const growthPct = typeof currentTree.growth === 'number' ? Math.min(100, Math.max(0, currentTree.growth)) : 0;
+                        const daysGrown = Math.min(currentTree.daysGrowing || 1, 21);
+                        const dailyDone = typeof currentTree.dailyGrowthGained === 'number' ? currentTree.dailyGrowthGained : 0;
+                        const isDailyFull = dailyDone >= 4.762;
+                        return (
+                            <View style={{ marginTop: 8 }}>
+                                {/* Bar row with % on right */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={[styles.growthBarBg, { flex: 1 }]}>
+                                        <View style={[styles.growthBarFill, { width: `${growthPct}%` }]} />
+                                    </View>
+                                    <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '900', minWidth: 32, textAlign: 'right' }}>
+                                        {Math.round(growthPct)}%
+                                    </Text>
+                                </View>
+                                {/* Single compact info line */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9 }}>📅 Day {daysGrown}/21</Text>
+                                    <Text style={{ color: isDailyFull ? '#FF5252' : '#4CAF50', fontSize: 9, fontWeight: '700' }}>
+                                        {isDailyFull ? '✅ Max today' : `+${(4.762 - dailyDone).toFixed(1)}% left`}
+                                    </Text>
+                                </View>
+                            </View>
+                        );
+                    })()}
                 </View>
 
-                <View style={[styles.bottomNavigationPlaceholder, { height: Math.max(insets.bottom, 20) }]} />
             </ImageBackground>
-
-            {/* --- WATERING MINI-GAME MODAL --- */}
-            <Modal visible={isWaterGameVisible} transparent animationType="fade">
-                <View style={styles.gameOverlay}>
-                    <View style={{ backgroundColor: 'rgba(0,0,0,0.8)', ...StyleSheet.absoluteFillObject }} />
-                    <View style={styles.waterGameBox}>
-                        <Text style={styles.gameHead}>DROP CONTROL</Text>
-                        <Text style={styles.gameSub}>Stop at the center for PERFECT growth!</Text>
-
-                        <View style={styles.timingTrack}>
-                            <View style={styles.hitTarget} />
-                            <Animated.View style={[styles.waterPointer, { transform: [{ translateX: barAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 260] }) }] }]}>
-                                <Ionicons name="water" size={40} color="#00B0FF" />
-                                <View style={styles.pointerLine} />
-                            </Animated.View>
-                        </View>
-
-                        <TouchableOpacity activeOpacity={0.7} style={styles.masterTap} onPress={handleWaterTap}>
-                            <Text style={styles.masterTapText}>RELEASE DROP</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
 
             {/* --- SHAKE GAME FULLSCREEN --- */}
             <Modal visible={isShakeGameActive} transparent animationType="fade">
@@ -987,6 +1168,23 @@ export default function GameHomeScreen() {
 
                     {/* 📊 TOP HEADER — Fruit Counter + Timer */}
                     <LinearGradient colors={['rgba(0,0,0,0.92)', 'transparent']} style={styles.shakeHeader}>
+                        {/* 🔙 Back Button and Title Row */}
+                        <View style={{ flexDirection: 'row', width: '100%', paddingHorizontal: 25, alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                            <TouchableOpacity 
+                                style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }} 
+                                onPress={() => {
+                                    setIsShakeGameActive(false);
+                                    if (params?.action === 'shake') {
+                                        router.push('/earn');
+                                    }
+                                }}
+                            >
+                                <Ionicons name="arrow-back" size={22} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 }}>SHAKE TREE GAME</Text>
+                            <View style={{ width: 38 }} />
+                        </View>
+
                         {/* Big Fruits Counter */}
                         <View style={styles.fruitCounterRow}>
                             <Text style={{ fontSize: 40 }}>🍎</Text>
@@ -1052,6 +1250,20 @@ export default function GameHomeScreen() {
     );
 }
 
+const TabItem = ({ icon, label, active, onPress }) => (
+  <TouchableOpacity
+    style={styles.tabBtn}
+    onPress={onPress}
+    activeOpacity={0.7}
+    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  >
+    <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
+      <Ionicons name={icon} size={24} color={active ? "#124916ff" : "#fff"} />
+    </View>
+    <Text style={styles.tabLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000' },
     bg: { flex: 1 },
@@ -1077,30 +1289,56 @@ const styles = StyleSheet.create({
     harvestBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
     headerActionBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     premiumAddBtn: { 
-        width: 48,
-        height: 48,
-        borderRadius: 24, 
+        width: 38,
+        height: 38,
+        borderRadius: 19, 
         backgroundColor: '#1B5E20', // Solid Dark Green
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2, 
+        borderWidth: 1.5, 
         borderColor: '#A5D6A7', 
-        elevation: 12,
+        elevation: 8,
         shadowColor: '#000',
-        shadowOpacity: 0.8,
-        shadowRadius: 10,
+        shadowOpacity: 0.5,
+        shadowRadius: 5,
         zIndex: 999
     },
     addBtnInner: { justifyContent: 'center', alignItems: 'center' },
 
-    leftControlsColumn: { position: 'absolute', left: 15, top: height * 0.71, zIndex: 200, gap: 15 },
-    rightControlsColumn: { position: 'absolute', right: 15, top: height * 0.52, zIndex: 200, gap: 15 },
+    leftControlsColumn: { position: 'absolute', left: 15, top: height * 0.67, zIndex: 200, gap: 10 },
+    rightControlsColumn: { position: 'absolute', right: 15, top: height * 0.49 , zIndex: 200, gap: 10 },
     verticalGlassBtn: { width: 110, height: 130, justifyContent: 'center', alignItems: 'center' },
     verticalBtnLabel: { color: '#fff', fontSize: 12, fontWeight: '900', marginTop: -10, textTransform: 'uppercase', textShadowColor: '#000', textShadowRadius: 4 },
+    lockedShakeBtn: { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.3)' },
+    shakeLockBadge: { position: 'absolute', top: -15, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)', zIndex: 99 },
+    shakeLockText: { color: '#FFD700', fontSize: 7, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
     moodPill: { marginLeft: 10, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
     moodText: { fontSize: 14 },
 
-    bottomNavigationPlaceholder: { width: '100%' },
+    bottomTab: {
+      position: 'absolute',
+      bottom: 0,
+      width: '100%',
+      backgroundColor: '#1B5E20',
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      borderTopLeftRadius: 25,
+      borderTopRightRadius: 25,
+      elevation: 10,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      zIndex: 9999
+    },
+    tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+    tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    activeTabIcon: { backgroundColor: '#fff' },
+    tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+    centerBtn: { marginTop: -22, alignItems: 'center', zIndex: 10000 },
+    centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+    centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+    centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     treeContainer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 0 },
     mainTreeImg: { width: width * 0.6, height: width * 0.6 },
@@ -1157,20 +1395,20 @@ const styles = StyleSheet.create({
     emptySubText: { color: '#A5D6A7', fontSize: 14, marginTop: 5 },
 
     // 🌱 GROWTH STAGE TRACKER — compact floating strip
-    stageTrackerCard: { marginHorizontal: 10, marginBottom: 12, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 25, paddingVertical: 15, paddingHorizontal: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', elevation: 5 },
+    stageTrackerCard: { marginHorizontal: 10, marginBottom: 8, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', elevation: 5 },
     stageTrackerTitle: { color: '#FFD700', fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 10, textAlign: 'center', textTransform: 'uppercase' },
     stageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
     stageStep: { alignItems: 'center', width: 44 },
-    stageCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', marginBottom: 4 },
+    stageCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)', marginBottom: 2 },
     stageDone: { backgroundColor: 'rgba(76,175,80,0.5)', borderColor: '#4CAF50' },
     stageActive: { backgroundColor: 'rgba(255,215,0,0.25)', borderColor: '#FFD700', borderWidth: 2.5, shadowColor: '#FFD700', shadowOpacity: 0.9, shadowRadius: 10, elevation: 12, transform: [{ scale: 1.15 }] },
-    stageEmoji: { fontSize: 20 },
+    stageEmoji: { fontSize: 15 },
     stageLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '700', textAlign: 'center' },
     stageLabelActive: { color: '#FFD700', fontWeight: '900', fontSize: 10 },
     stageLabelHi: { color: 'rgba(255,255,255,0.35)', fontSize: 7, textAlign: 'center' },
-    stageConnector: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 18, marginHorizontal: 2 },
+    stageConnector: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 12, marginHorizontal: 2 },
     stageConnectorDone: { backgroundColor: '#4CAF50' },
-    growthBarBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, marginTop: 12, overflow: 'hidden' },
+    growthBarBg: { height: 5, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, marginTop: 5, overflow: 'hidden' },
     growthBarFill: { height: '100%', backgroundColor: '#4CAF50', borderRadius: 3 },
     growthPct: { color: 'rgba(255,255,255,0.6)', fontSize: 10, textAlign: 'center', marginTop: 6 },
 

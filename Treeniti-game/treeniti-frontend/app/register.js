@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,8 @@ import {
   Alert,
   Modal,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  NativeModules
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,9 +20,36 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
 
+
+
+// Safe MSG91 SDK Import (Prevents crash in Expo Go / missing native module environment)
+let OTPWidget = null;
+try {
+  OTPWidget = require('@msg91comm/sendotp-react-native').OTPWidget;
+} catch (error) {
+  console.warn("MSG91 SendOTP Native Module is not linked/available. Falling back to Simulation Mode.", error);
+}
+
+// MSG91 SendOTP Configuration
+const widgetId = '366573726354373030383232';
+const tokenAuth = process.env.EXPO_PUBLIC_MSG91_AUTH_TOKEN || '';
+
 const { width } = Dimensions.get('window');
 
 export default function Register() {
+  const [reqId, setReqId] = useState('');
+
+  useEffect(() => {
+    if (OTPWidget && widgetId && tokenAuth) {
+      try {
+        OTPWidget.initializeWidget(widgetId, tokenAuth);
+      } catch (err) {
+        console.error("Failed to initialize MSG91 Widget:", err);
+      }
+    } else {
+      console.warn("MSG91 SendOTP is missing widgetId/tokenAuth config OR running in simulation environment");
+    }
+  }, []);
   const router = useRouter();
   const [form, setForm] = useState({
     mobile: '',
@@ -39,43 +67,155 @@ export default function Register() {
   const [otp, setOTP] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleRegisterPress = () => {
+  const handleRegisterPress = async () => {
     // Basic Validations
     if (!form.mobile || form.mobile.length !== 10) return Alert.alert("Error", "Please enter valid 10-digit mobile number.");
     if (form.loginPassword !== form.confirmPassword) return Alert.alert("Error", "Login passwords do not match.");
 
-    // Step 1: Show OTP Modal (Simulation)
-    setOTPModalVisible(true);
+    // Fallback to Simulation Mode if native module is not available or MSG91 keys are not configured in .env
+    if (!OTPWidget || !widgetId || !tokenAuth) {
+      setOTPModalVisible(true);
+      Alert.alert("Simulation Mode", "MSG91 is not configured in .env or native module is not linked. Running in simulation mode.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = {
+        identifier: '91' + form.mobile
+      };
+      console.log("Sending OTP with data:", data);
+      const response = await OTPWidget.sendOTP(data);
+      console.log("Send OTP Response:", response);
+      
+      const isSuccess = response && (
+        response.reqId ||
+        response.request_id ||
+        response.type === 'success' ||
+        (response.message && response.message.length > 8 && !response.message.includes('error'))
+      );
+
+      if (isSuccess) {
+        const actualReqId = response.reqId || response.request_id || response.message;
+        setReqId(actualReqId);
+        setOTPModalVisible(true);
+        Alert.alert("Success", "OTP sent successfully to +91 " + form.mobile);
+      } else {
+        Alert.alert(
+          "OTP Failed",
+          (response && response.message) || "Failed to send OTP.",
+          [
+            { text: "OK" }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Send OTP Error:", error);
+      Alert.alert("Error", "Failed to send OTP: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!OTPWidget || !widgetId || !tokenAuth || !reqId) {
+      Alert.alert("Resend OTP", "Resending OTP is not supported in simulation mode.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const body = {
+        reqId: reqId,
+        retryChannel: 11 // 11 is SMS
+      };
+      console.log("Retrying OTP with body:", body);
+      const response = await OTPWidget.retryOTP(body);
+      console.log("Retry OTP Response:", response);
+      Alert.alert("Success", "OTP has been resent to your mobile number.");
+    } catch (error) {
+      console.error("Retry OTP Error:", error);
+      Alert.alert("Error", "Failed to resend OTP: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const finalizeRegistration = async () => {
-    if (otp !== '123456') return Alert.alert("Error", "Invalid OTP. Use 123456 for demo.");
+    if (!otp) return Alert.alert("Error", "Please enter the OTP.");
     
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mobile: form.mobile,
-          otp: otp,
-          loginPassword: form.loginPassword,
-          fundPassword: form.fundPassword,
-          refCode: form.inviteCode
-        })
-      });
+      // 1. If MSG91 is not configured/linked in this environment, complete simulation registration
+      if (!OTPWidget || !widgetId || !tokenAuth) {
+        const backendResponse = await fetch(`${BASE_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mobile: form.mobile,
+            otp: '123456', // Pass bypass master code internally to backend to complete session
+            loginPassword: form.loginPassword,
+            fundPassword: form.fundPassword,
+            refCode: form.inviteCode
+          })
+        });
 
-      const data = await response.json();
-      if (data.success) {
-        await AsyncStorage.setItem('userToken', data.token);
-        Alert.alert("Success", "Welcome to Treeniti!", [
-          { text: "Let's Play", onPress: () => router.replace('/home') }
-        ]);
+        const data = await backendResponse.json();
+        if (data.success) {
+          await AsyncStorage.setItem('userToken', data.token);
+          Alert.alert("Success", "Welcome to Treeniti!", [
+            { text: "Let's Play", onPress: () => router.replace('/home') }
+          ]);
+        } else {
+          Alert.alert("Registration Failed", data.error || "Something went wrong");
+        }
+        return;
+      }
+
+      // 2. Otherwise, verify via MSG91
+      const body = {
+        reqId: reqId,
+        otp: otp
+      };
+      console.log("Verifying OTP with body:", body);
+      const response = await OTPWidget.verifyOTP(body);
+      console.log("Verify OTP Response:", response);
+
+      const isSuccess = response && (
+        response.success || 
+        response.type === 'success' || 
+        response.message === 'Authentication succeeded' || 
+        (response.message && response.message.toLowerCase().includes('success'))
+      );
+
+      if (isSuccess) {
+        // Verification succeeded! Now call the backend with bypass OTP
+        const backendResponse = await fetch(`${BASE_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mobile: form.mobile,
+            otp: '123456', // Pass master bypass code since OTP is already verified on frontend
+            loginPassword: form.loginPassword,
+            fundPassword: form.fundPassword,
+            refCode: form.inviteCode
+          })
+        });
+
+        const data = await backendResponse.json();
+        if (data.success) {
+          await AsyncStorage.setItem('userToken', data.token);
+          Alert.alert("Success", "Welcome to Treeniti!", [
+            { text: "Let's Play", onPress: () => router.replace('/home') }
+          ]);
+        } else {
+          Alert.alert("Registration Failed", data.error || "Something went wrong");
+        }
       } else {
-        Alert.alert("Registration Failed", data.error || "Something went wrong");
+        Alert.alert("Verification Failed", (response && response.message) || "Invalid OTP. Please try again.");
       }
     } catch (error) {
-      Alert.alert("Network Error", "Cannot connect to server. Check your connection.");
+      console.error("Verification Error:", error);
+      Alert.alert("Error", "Cannot verify OTP: " + error.message);
     } finally {
       setLoading(false);
       setOTPModalVisible(false);
@@ -145,7 +285,7 @@ export default function Register() {
                 <Text style={styles.loginLinkText}>Already have an account? <Text style={{color: '#2563EB', fontWeight: 'bold'}}>Login</Text></Text>
             </TouchableOpacity>
         </View>
-        <Text style={styles.versionText}>Treeniti - v1.0.2</Text>
+        <Text style={styles.versionText}>Treeniti - v1.0.3</Text>
       </ScrollView>
 
       {/* OTP MODAL */}
@@ -160,13 +300,15 @@ export default function Register() {
                     onChangeText={setOTP} 
                     maxLength={6} 
                     keyboardType="numeric" 
-                    placeholder="123456"
+                    placeholder="------"
                     placeholderTextColor="#ccc"
                   />
-                  <Text style={styles.otpHint}>Demo Code: 123456</Text>
                   
                   <TouchableOpacity style={styles.verifyBtn} onPress={finalizeRegistration} disabled={loading}>
                       {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyText}>Verify & Join</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleResendOtp} disabled={loading} style={{marginTop: 15}}>
+                      <Text style={{color: '#2563EB', fontWeight: 'bold'}}>Resend OTP via SMS</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setOTPModalVisible(false)} style={{marginTop: 15}}>
                       <Text style={{color: '#999'}}>Cancel</Text>

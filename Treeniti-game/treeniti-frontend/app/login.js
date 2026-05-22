@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,8 @@ import {
   Alert,
   Modal,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  NativeModules
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,50 +21,63 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 
+
+
+// Safe MSG91 SDK Import (Prevents crash in Expo Go / missing native module environment)
+let OTPWidget = null;
+try {
+  OTPWidget = require('@msg91comm/sendotp-react-native').OTPWidget;
+} catch (error) {
+  console.warn("MSG91 SendOTP Native Module is not linked/available. Falling back to Simulation Mode.", error);
+}
+
+// MSG91 SendOTP Configuration
+const widgetId = '366573726354373030383232';
+const tokenAuth = process.env.EXPO_PUBLIC_MSG91_AUTH_TOKEN || '';
+
 const { width } = Dimensions.get('window');
 
 export default function Login() {
   const router = useRouter();
   const { t, language, changeLanguage } = useLanguage();
   const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isOTPVisible, setIsOTPVisible] = useState(false);
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [secureTextEntry, setSecureTextEntry] = useState(true);
 
   const handleLoginPress = async () => {
     if (!mobile || mobile.length !== 10) {
         return Alert.alert("Error", "Please enter a valid 10-digit mobile number.");
     }
-    // Demo Mode: Just show OTP field immediately
-    setIsOTPVisible(true);
-    Alert.alert("Demo Mode", "Please enter the universal demo OTP: 123456");
-  };
-
-  const finalizeLogin = async () => {
-    if (otp !== '123456') return Alert.alert("Error", "Invalid OTP. Use 123456 for demo.");
+    if (!password) {
+        return Alert.alert("Error", "Please enter your password.");
+    }
     
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile, otp })
-      });
+        const backendResponse = await fetch(`${BASE_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile, loginPassword: password }) 
+        });
 
-      const data = await response.json();
-      if (data.success) {
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('userId', data.user._id);
-        router.replace('/home');
-      } else {
-        Alert.alert("Login Failed", data.error || "User not found. Please register.");
-      }
+        const data = await backendResponse.json();
+        if (data.success) {
+          await AsyncStorage.setItem('userToken', data.token);
+          await AsyncStorage.setItem('userId', data.user._id);
+          router.replace('/home');
+        } else {
+          Alert.alert("Login Failed", data.error || "User not found or incorrect password.");
+        }
     } catch (error) {
-      Alert.alert("Error", "Cannot connect to server.");
+        console.error("Login Error:", error);
+        Alert.alert("Error", "Failed to login: " + error.message);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -109,34 +123,30 @@ export default function Login() {
                 </View>
             </View>
 
-            {!isOTPVisible ? (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleLoginPress}>
-                    <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.btnGradient}>
-                        <Text style={styles.btnText}>{language === 'hi' ? 'ओटीपी प्राप्त करें' : 'Login with OTP'}</Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-            ) : (
-                <View style={styles.otpSection}>
+            <View style={styles.inputWrapper}>
+                <View style={styles.inputBody}>
+                    <View style={styles.iconBox}>
+                        <Ionicons name="lock-closed-outline" size={20} color="#666" />
+                    </View>
                     <TextInput 
-                        style={styles.otpInput} 
-                        placeholder={language === 'hi' ? "ओटीपी दर्ज करें" : "ENTER OTP (123456)"} 
-                        placeholderTextColor="#ccc"
-                        value={otp}
-                        onChangeText={setOtp}
-                        maxLength={6}
-                        keyboardType="numeric"
+                        style={styles.input}
+                        placeholder={language === 'hi' ? "पासवर्ड दर्ज करें" : "Enter your password"}
+                        placeholderTextColor="#999"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry={secureTextEntry}
                     />
-                    <TouchableOpacity style={styles.primaryBtn} onPress={finalizeLogin} disabled={loading}>
-                        <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{language === 'hi' ? 'सत्यापित करें' : 'Verify & Login'}</Text>}
-                        </LinearGradient>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setIsOTPVisible(false)} style={{marginTop: 15, alignItems: 'center'}}>
-                         <Text style={{color: '#999'}}>{language === 'hi' ? 'नंबर बदलें' : 'Change Number'}</Text>
+                    <TouchableOpacity onPress={() => setSecureTextEntry(!secureTextEntry)} style={styles.toggleBtn}>
+                        <Ionicons name={secureTextEntry ? "eye-off-outline" : "eye-outline"} size={20} color="#aaa" />
                     </TouchableOpacity>
                 </View>
-            )}
+            </View>
 
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleLoginPress} disabled={loading}>
+                <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
+                    {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{language === 'hi' ? 'लॉग इन करें' : 'Login'}</Text>}
+                </LinearGradient>
+            </TouchableOpacity>
             <View style={styles.divider}>
                 <View style={styles.line} />
                 <Text style={styles.orText}>{language === 'hi' ? 'Treeniti में नए हैं?' : 'New to Treeniti?'}</Text>
@@ -148,7 +158,7 @@ export default function Login() {
             </TouchableOpacity>
         </View>
         
-        <Text style={styles.versionText}>v1.0.2 • Made with ❤️ for Nature</Text>
+        <Text style={styles.versionText}>v1.0.3 • Made with ❤️ for Nature</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -169,14 +179,12 @@ const styles = StyleSheet.create({
   iconBox: { width: 30, alignItems: 'center', marginRight: 10 },
   input: { flex: 1, fontSize: 15, color: '#333' },
 
-  primaryBtn: { marginTop: 10, borderRadius: 25, overflow: 'hidden', height: 60, elevation: 5, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10 },
+  primaryBtn: { marginTop: 10, borderRadius: 25, overflow: 'hidden', height: 60, elevation: 5, shadowColor: '#10B981', shadowOpacity: 0.3, shadowRadius: 10 },
   btnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  toggleBtn: { padding: 10 },
 
-  otpSection: { marginTop: 10 },
-  otpInput: { backgroundColor: '#fff', borderRadius: 20, height: 60, textAlign: 'center', fontSize: 18, fontWeight: 'bold', marginBottom: 15, letterSpacing: 5, borderWidth: 1, borderColor: '#3B82F6' },
-
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 40 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 30 },
   line: { flex: 1, height: 1, backgroundColor: '#E0E0E0' },
   orText: { marginHorizontal: 15, fontSize: 12, color: '#999' },
 

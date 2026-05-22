@@ -46,13 +46,15 @@ exports.getTrees = async (req, res) => {
     try {
         const trees = await Tree.find({ userId: req.user.userId });
         
-        // Dynamically update moods based on real-time care gaps
+        // Dynamically update moods & daysGrowing based on real-time care gaps & plantedAt
         const updatedTrees = trees.map(tree => {
-            const newMood = resolveTreeMood(tree);
-            // We don't necessarily need to save to DB every GET to save performance, 
-            // but we return the computed mood to the UI.
-            tree.mood = newMood; 
-            return tree;
+            const tObj = tree.toObject();
+            tObj.mood = resolveTreeMood(tree); 
+            
+            // Calculate actual days growing (at least 1)
+            const msDiff = Date.now() - new Date(tree.plantedAt).getTime();
+            tObj.daysGrowing = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24)));
+            return tObj;
         });
 
         res.json({ success: true, trees: updatedTrees });
@@ -90,9 +92,8 @@ exports.waterTree = async (req, res) => {
         if (!tree) return res.status(404).json({ error: "Tree not found" });
         const user = await User.findById(req.user.userId);
 
-        // LAUNCH SECURITY: Enforce minimum 1 hour cooldown between watering
-        // 🏁 SRS 3.2.1: Enforcement of Daily Growth Limit
-        const dailyLimit = 100; // Testing: Allow 100% growth in one day (Market production: 4%)
+        // 🏁 Enforce exactly 21 days growth cycle (100 / 21 = 4.762% per day)
+        const dailyLimit = 4.762;
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -102,41 +103,49 @@ exports.waterTree = async (req, res) => {
             tree.lastGrowthResetDate = now;
         }
 
+        // Initialize to 0 if undefined/NaN to prevent bypassing limits
+        tree.dailyGrowthGained = tree.dailyGrowthGained || 0;
+        tree.growth = tree.growth || 0;
+
         if (tree.dailyGrowthGained >= dailyLimit) {
-            return res.status(403).json({ error: `You have reached the ${dailyLimit}% daily growth limit for this tree. Please come back tomorrow!` });
+            return res.status(403).json({ error: `You have reached the max daily growth limit of ${dailyLimit}% for this tree today. Water or fertilize it again tomorrow to continue growing!` });
         }
 
 
+        // ✅ No cooldown — User can water as many times as they want!
+        // Daily growth limit of 4.762% still ensures 21-day growth cycle.
 
-        if (tree.lastWatered && (Date.now() - new Date(tree.lastWatered).getTime() < 30000)) {
-            const timeRemaining = Math.ceil((30000 - (Date.now() - new Date(tree.lastWatered).getTime())) / 1000);
-            return res.status(429).json({ error: `Tree is fully hydrated. Please wait ${timeRemaining} seconds before watering again.` });
-        }
 
-        // RPG Game Design: Rapid Testing Growth (20% per watering)
-        let baseGrowth = 20; 
+        // Normal watering gives 2.381% growth (takes 2 waterings to hit daily limit of 4.762%)
+        let baseGrowth = 2.381; 
         let multiplier = 1;
 
-        // Fertilizer RPG Economy Element
+        // Fertilizer Economy Element: Gives the entire daily limit boost instantly in one click!
         if (useFertilizer && String(useFertilizer) === 'true') {
             if (user.fertilizerStock <= 0) {
                  return res.status(400).json({ error: "Insufficient Fertilizer Stock. Please buy or earn more!" });
             }
             user.fertilizerStock -= 1;
-            // SRS 3.2.1: Fertilizer increases growth speed or provides a stage boost
-            tree.growth += 20; // Rapid Testing Boost (Market: 5% or 2x speed)
+            // Instantly fill up the daily limit
+            baseGrowth = dailyLimit - tree.dailyGrowthGained;
             tree.lastFertilized = Date.now();
         }
 
         // Apply Growth & Hard Stop at 100%
-        let addedGrowth = Math.floor(baseGrowth * multiplier);
-        let newGrowth = tree.growth + addedGrowth;
+        let addedGrowth = parseFloat((baseGrowth * multiplier).toFixed(3));
+        
+        // Ensure we don't exceed the daily limit
+        if (tree.dailyGrowthGained + addedGrowth > dailyLimit) {
+            addedGrowth = parseFloat((dailyLimit - tree.dailyGrowthGained).toFixed(3));
+        }
+
+        let newGrowth = parseFloat((tree.growth + addedGrowth).toFixed(3));
         if (newGrowth > 100) {
-             addedGrowth = 100 - tree.growth;
+             addedGrowth = parseFloat((100 - tree.growth).toFixed(3));
              newGrowth = 100;
         }
 
-        tree.dailyGrowthGained += addedGrowth;
+        tree.dailyGrowthGained = parseFloat((tree.dailyGrowthGained + addedGrowth).toFixed(3));
 
         const oldLevel = tree.level;
         const newLevel = getLevelName(newGrowth);
@@ -227,6 +236,20 @@ exports.fertilizeTree = async (req, res) => {
 exports.plantNewTree = async (req, res) => {
     try {
         const { treeName } = req.body;
+
+        // Check active/growing trees count (level below 'Mature Tree', growth < 90)
+        const activeCount = await Tree.countDocuments({
+            userId: req.user.userId,
+            level: { $in: ['Seed', 'Sprout', 'Plant', 'Growing Plant', 'Young Tree'] }
+        });
+
+        if (activeCount >= 2) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Limit Reached: You can only have a maximum of 2 active virtual trees growing at the same time. Grow one of your active trees to a 'Mature Tree' before planting a new one!" 
+            });
+        }
+
         const user = await User.findById(req.user.userId);
         const newTree = new Tree({ userId: req.user.userId, treeName: treeName || "New Plant" });
         await newTree.save();
@@ -323,6 +346,7 @@ exports.harvestFruits = async (req, res) => {
         }).save({ session });
 
         tree.fruitsAvailable = 0; 
+        tree.isHarvested = true;
         tree.mood = 'Excited'; 
         await tree.save({ session });
 
@@ -405,7 +429,7 @@ exports.uploadPlantationProof = async (req, res) => {
 
 exports.getPlantationProofs = async (req, res) => {
     try {
-        const proofs = await PlantationProof.find({ userId: req.user.userId }).sort({ day: 1 });
+        const proofs = await PlantationProof.find({ userId: req.user.userId }).populate('treeId').sort({ day: 1 });
         res.json({ success: true, proofs });
     } catch (err) {
         res.status(500).json({ error: err.message });

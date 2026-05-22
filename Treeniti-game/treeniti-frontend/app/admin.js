@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -15,7 +15,12 @@ export default function AdminDashboard() {
   const [pendingWithdrawals, setPendingWithdrawals] = useState([]);
   const [userRole, setUserRole] = useState('Admin'); 
   const [allUsers, setAllUsers] = useState([]);
-  const [config, setConfig] = useState({ conversionRate: 100, loginReward: 10 });
+  const [config, setConfig] = useState({ 
+    conversionRate: 100, 
+    loginReward: 10,
+    socialRewards: { YouTube: 150, Facebook: 100, Instagram: 100, X: 50, WhatsApp: 50, Telegram: 50 },
+    socialLinks: { YouTube: '', Facebook: '', Instagram: '', X: '', WhatsApp: '', Telegram: '' }
+  });
   const [showRoleMgr, setShowRoleMgr] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showWithdrawMgr, setShowWithdrawMgr] = useState(false);
@@ -146,6 +151,45 @@ export default function AdminDashboard() {
             setShowConfig(false);
         }
       } catch (e) {}
+  };
+
+  const fetchConfig = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const res = await fetch(`${BASE_URL}/admin/config`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if(data.success && data.config) {
+          setConfig({
+            conversionRate: data.config.conversionRate ?? 100,
+            loginReward: data.config.loginReward ?? 10,
+            socialRewards: data.config.socialRewards ?? {
+              YouTube: 150,
+              Facebook: 100,
+              Instagram: 100,
+              X: 50,
+              WhatsApp: 50,
+              Telegram: 50
+            },
+            socialLinks: data.config.socialLinks ?? {
+              YouTube: "",
+              Facebook: "",
+              Instagram: "",
+              X: "",
+              WhatsApp: "",
+              Telegram: ""
+            }
+          });
+      }
+    } catch(e) {
+      console.log("Error fetching config:", e);
+    }
+  };
+
+  const openConfigModal = async () => {
+    await fetchConfig();
+    setShowConfig(true);
   };
 
   const handlePostNotice = async () => {
@@ -299,7 +343,7 @@ export default function AdminDashboard() {
             <View style={[styles.section, {backgroundColor: '#FFFDE7'}]}>
                 <Text style={[styles.sectionTitle, {color: '#FBC02D'}]}>👑 Super Admin Panel</Text>
                 
-                <TouchableOpacity style={[styles.btn, {backgroundColor: '#FBC02D'}]} onPress={() => setShowConfig(true)}>
+                <TouchableOpacity style={[styles.btn, {backgroundColor: '#FBC02D'}]} onPress={openConfigModal}>
                     <Text style={[styles.btnText, {color: '#333'}]}>Global System Config</Text>
                 </TouchableOpacity>
             </View>
@@ -309,19 +353,43 @@ export default function AdminDashboard() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>✅ Real Plantation Queue ({stats.p_pending})</Text>
           {pendingTrees.length === 0 ? <Text style={{color:'#666'}}>No proofs pending review.</Text> : pendingTrees.map(pt => (
-             <View key={pt._id} style={styles.itemCard}>
-              <View style={{flex: 1}}>
-                <Text style={styles.itemName}>{pt.userId?.name || 'Unknown User'}</Text>
-                <Text style={styles.itemSub}>{pt.treeId?.treeName || 'Unassigned'} - Uploaded Photo</Text>
+             <View key={pt._id} style={[styles.itemCard, { flexDirection: 'column', alignItems: 'stretch' }]}>
+              
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10}}>
+                <View style={{flex: 1}}>
+                  <Text style={styles.itemName}>{pt.userId?.name || 'Unknown User'}</Text>
+                  <Text style={styles.itemSub}>{pt.treeId?.treeName || 'Unassigned'} - Day {pt.day}</Text>
+                </View>
+                <View style={{flexDirection: 'row', marginLeft: 10}}>
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => Alert.alert("Admin Engine", "Backend Hook /verify dispatched with Status 'Verified'")}>
+                     <Ionicons name="checkmark-circle" size={28} color="green" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.iconBtn, { marginLeft: 10 }]} onPress={() => Alert.alert("Admin Engine", "Backend Hook /verify dispatched with Status 'Rejected'")}>
+                     <Ionicons name="close-circle" size={28} color="red" />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={{flexDirection: 'row', marginLeft: 10}}>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => Alert.alert("Admin Engine", "Backend Hook /verify dispatched with Status 'Verified'")}>
-                   <Ionicons name="checkmark-circle" size={28} color="green" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => Alert.alert("Admin Engine", "Backend Hook /verify dispatched with Status 'Rejected'")}>
-                   <Ionicons name="close-circle" size={28} color="red" />
-                </TouchableOpacity>
-              </View>
+
+              {/* Proof Notes (Plant Name, Date, Location) */}
+              {pt.notes ? (
+                <View style={{ backgroundColor: '#F5F5F5', padding: 10, borderRadius: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 13, color: '#444', lineHeight: 20 }}>{pt.notes}</Text>
+                </View>
+              ) : null}
+
+              {/* Uploaded Images */}
+              {pt.images && pt.images.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                  {pt.images.map((imgUrl, idx) => (
+                    <Image 
+                      key={idx} 
+                      source={{ uri: imgUrl }} 
+                      style={{ width: 100, height: 100, borderRadius: 10, marginRight: 10, backgroundColor: '#eee' }} 
+                    />
+                  ))}
+                </ScrollView>
+              )}
+
              </View>
           ))}
         </View>
@@ -390,36 +458,75 @@ export default function AdminDashboard() {
 
 
       {/* Config Modal */}
-      <Modal visible={showConfig} animationType="fade" transparent>
-          <View style={styles.modalBg}>
-              <View style={styles.modalCard}>
-                  <Text style={styles.modalTitle}>System Configuration</Text>
-                  <View style={{width: '100%', marginTop: 20}}>
-                      <Text style={{fontSize: 12, marginBottom: 5}}>Conversion Rate (Coins per ₹1)</Text>
-                      <TextInput 
-                        style={styles.input} 
-                        keyboardType="numeric" 
-                        value={String(config.conversionRate)}
-                        onChangeText={(v) => setConfig({...config, conversionRate: parseInt(v)})}
-                      />
-
-                      <Text style={{fontSize: 12, marginBottom: 5, marginTop: 15}}>Login Reward (Coins)</Text>
-                      <TextInput 
-                        style={styles.input} 
-                        keyboardType="numeric" 
-                        value={String(config.loginReward)}
-                        onChangeText={(v) => setConfig({...config, loginReward: parseInt(v)})}
-                      />
-
-                      <TouchableOpacity style={[styles.btn, {marginTop: 20}]} onPress={handleUpdateConfig}>
-                          <Text style={styles.btnText}>Apply Global Changes</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={{alignSelf: 'center', marginTop: 15}} onPress={() => setShowConfig(false)}>
-                          <Text style={{color: 'red'}}>Cancel</Text>
-                      </TouchableOpacity>
-                  </View>
+      <Modal visible={showConfig} animationType="slide">
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+              <View style={[styles.header, { paddingTop: 20 }]}>
+                  <TouchableOpacity onPress={() => setShowConfig(false)}>
+                      <Ionicons name="close" size={28} color="#fff" />
+                  </TouchableOpacity>
+                  <Text style={styles.headerTitle}>System Configuration</Text>
+                  <View style={{ width: 28 }} />
               </View>
-          </View>
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1B5E20', marginBottom: 15 }}>💰 Standard Rewards</Text>
+                  
+                  <Text style={{ fontSize: 12, marginBottom: 5 }}>Conversion Rate (Coins per ₹1)</Text>
+                  <TextInput 
+                    style={[styles.input, { height: 50, marginBottom: 15, textAlignVertical: 'center' }]} 
+                    keyboardType="numeric" 
+                    value={String(config.conversionRate ?? 100)}
+                    onChangeText={(v) => setConfig({...config, conversionRate: parseInt(v) || 0})}
+                  />
+
+                  <Text style={{ fontSize: 12, marginBottom: 5 }}>Login Reward (Coins)</Text>
+                  <TextInput 
+                    style={[styles.input, { height: 50, marginBottom: 25, textAlignVertical: 'center' }]} 
+                    keyboardType="numeric" 
+                    value={String(config.loginReward ?? 10)}
+                    onChangeText={(v) => setConfig({...config, loginReward: parseInt(v) || 0})}
+                  />
+
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1B5E20', marginBottom: 15 }}>🔗 Social Links & Rewards</Text>
+                  
+                  {['YouTube', 'Facebook', 'Instagram', 'X', 'WhatsApp', 'Telegram'].map((platform) => (
+                      <View key={platform} style={{ marginBottom: 20, padding: 15, backgroundColor: '#F9F9F9', borderRadius: 15, borderWidth: 1, borderColor: '#EEE' }}>
+                          <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333', marginBottom: 10 }}>{platform}</Text>
+                          
+                          <Text style={{ fontSize: 11, color: '#666', marginBottom: 5 }}>Target Link URL</Text>
+                          <TextInput 
+                            style={[styles.input, { height: 45, marginBottom: 10, textAlignVertical: 'center' }]} 
+                            placeholder={`Enter ${platform} URL`}
+                            value={config.socialLinks?.[platform] || ''}
+                            onChangeText={(v) => {
+                              const newLinks = { ...(config.socialLinks || {}) };
+                              newLinks[platform] = v;
+                              setConfig({ ...config, socialLinks: newLinks });
+                            }}
+                          />
+
+                          <Text style={{ fontSize: 11, color: '#666', marginBottom: 5 }}>Reward (Coins)</Text>
+                          <TextInput 
+                            style={[styles.input, { height: 45, textAlignVertical: 'center' }]} 
+                            keyboardType="numeric" 
+                            placeholder="Enter coins"
+                            value={String(config.socialRewards?.[platform] ?? 50)}
+                            onChangeText={(v) => {
+                              const newRewards = { ...(config.socialRewards || {}) };
+                              newRewards[platform] = parseInt(v) || 0;
+                              setConfig({ ...config, socialRewards: newRewards });
+                            }}
+                          />
+                      </View>
+                  ))}
+
+                  <TouchableOpacity style={[styles.btn, { marginTop: 10, marginBottom: 20 }]} onPress={handleUpdateConfig}>
+                      <Text style={styles.btnText}>Apply Global Changes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ alignSelf: 'center', marginBottom: 40 }} onPress={() => setShowConfig(false)}>
+                      <Text style={{ color: 'red', fontWeight: 'bold' }}>Cancel</Text>
+                  </TouchableOpacity>
+              </ScrollView>
+          </SafeAreaView>
       </Modal>
 
       {/* --- Tree Message Manager Modal --- */}

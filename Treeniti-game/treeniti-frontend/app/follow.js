@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Alert, Linking, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Alert, Linking, ActivityIndicator, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
 import { useConfig } from '../context/ConfigContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -17,6 +18,119 @@ export default function FollowUs() {
   const { t, language } = useLanguage();
   const [user, setUser] = useState(null);
   const [claiming, setClaiming] = useState(null);
+  const [coinsToAnimate, setCoinsToAnimate] = useState([]);
+  const badgeScale = useRef(new Animated.Value(1)).current;
+
+  const playCoinSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/coin_collect.mp3')
+      );
+      await sound.playAsync();
+      setTimeout(() => {
+        sound.unloadAsync().catch(() => {});
+      }, 2500);
+    } catch (e) {
+      console.log("Audio play error:", e);
+    }
+  };
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      interruptionModeIOS: 1, // InterruptionModeIOS.DoNotMix
+      playsInSilentModeIOS: true,
+      shouldRouteThroughEarpieceAndroid: false,
+      interruptionModeAndroid: 1, // InterruptionModeAndroid.DoNotMix
+    }).catch(e => console.log("Audio mode error:", e));
+  }, []);
+
+  const triggerCoinAnimation = (startX = width / 2 - 12, startY = Dimensions.get('window').height / 2) => {
+    playCoinSound();
+    const coinCount = 12;
+    startX = width / 2 - 12; // Force strictly to the horizontal center of the screen
+    const targetX = width - 65; 
+    const targetY = Platform.OS === 'ios' ? 50 : 60; 
+
+    const newCoins = Array.from({ length: coinCount }).map((_, index) => {
+      const angle = (index / coinCount) * 2 * Math.PI;
+      const burstDist = 25 + Math.random() * 40;
+      const burstX = startX + Math.cos(angle) * burstDist;
+      const burstY = startY + Math.sin(angle) * burstDist;
+
+      return {
+        id: `${Date.now()}-${index}`,
+        anim: new Animated.ValueXY({ x: startX, y: startY }),
+        burstX,
+        burstY,
+        scale: new Animated.Value(0),
+        opacity: new Animated.Value(0),
+        startX,
+        startY
+      };
+    });
+
+    setCoinsToAnimate(prev => [...prev, ...newCoins]);
+
+    newCoins.forEach((coin, index) => {
+      Animated.parallel([
+        Animated.timing(coin.anim, {
+          toValue: { x: coin.burstX, y: coin.burstY },
+          duration: 350,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.scale, {
+          toValue: 1.2,
+          duration: 250,
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ]).start(() => {
+        Animated.sequence([
+          Animated.delay(120 + index * 80), // Cascade delay
+          Animated.parallel([
+            Animated.timing(coin.anim, {
+              toValue: { x: targetX, y: targetY },
+              duration: 1600 + Math.random() * 400,
+              easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.scale, {
+              toValue: 0.7,
+              duration: 1600,
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.opacity, {
+              toValue: 0,
+              delay: 1400,
+              duration: 200,
+              useNativeDriver: true
+            })
+          ])
+        ]).start(() => {
+          setCoinsToAnimate(prev => prev.filter(c => c.id !== coin.id));
+          Animated.sequence([
+            Animated.timing(badgeScale, {
+              toValue: 1.25,
+              duration: 80,
+              useNativeDriver: true
+            }),
+            Animated.timing(badgeScale, {
+              toValue: 1.0,
+              duration: 80,
+              useNativeDriver: true
+            })
+          ]).start();
+        });
+      });
+    });
+  };
 
   const fetchProfile = async () => {
     try {
@@ -61,7 +175,7 @@ export default function FollowUs() {
     setTimeout(async () => {
       try {
         const token = await AsyncStorage.getItem('userToken');
-        const res = await fetch(`${BASE_URL}/rewards/social`, {
+        const res = await fetch(`${BASE_URL}/auth/rewards/social`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -72,6 +186,7 @@ export default function FollowUs() {
         const data = await res.json();
         
         if (data.success) {
+          triggerCoinAnimation(width / 2, Dimensions.get('window').height / 2);
           Alert.alert("Success! 🎉", data.message);
           fetchProfile(); // Update coin balance
         } else {
@@ -96,10 +211,10 @@ export default function FollowUs() {
           <Ionicons name="arrow-back" size={24} color="#1B5E20" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t.followUs || "Social Rewards"}</Text>
-        <View style={styles.coinBadge}>
-          <View style={styles.coinDot} />
+        <Animated.View style={[styles.coinBadge, { transform: [{ scale: badgeScale }] }]}>
+          <FontAwesome5 name="coins" size={14} color="#FBC02D" style={{ marginRight: 6 }} />
           <Text style={styles.coinText}>{user?.walletCoins || 0}</Text>
-        </View>
+        </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -111,46 +226,31 @@ export default function FollowUs() {
             <Text style={styles.missionSub}>Follow our official handles to get instant coins</Text>
           </View>
           <View style={styles.countPill}>
-             <Text style={styles.missionCount}>3 TASKS</Text>
+             <Text style={styles.missionCount}>6 TASKS</Text>
           </View>
         </View>
 
         {/* --- 📝 Mission List --- */}
         <View style={styles.listContainer}>
-          
-           {/* Task 1: YouTube */}
-          <MissionCard 
-            icon={<Ionicons name="logo-youtube" size={28} color="#FF0000" />}
-            title={language === 'hi' ? 'TREENITI TV को सब्सक्राइब करें' : "Subscribe to TREENITI TV"}
-            reward={rewards.YouTube || 150}
-            onPress={() => handleSocialAction('YouTube')}
-            completed={isClaimed('YouTube')}
-            loading={claiming === 'YouTube'}
-            t={t}
-          />
-
-          {/* Task 2: Instagram */}
-          <MissionCard 
-            icon={<Ionicons name="logo-instagram" size={28} color="#E1306C" />}
-            title={language === 'hi' ? 'हमें इंस्टाग्राम पर फॉलो करें' : "Follow us on Instagram"}
-            reward={rewards.Instagram || 150}
-            onPress={() => handleSocialAction('Instagram')}
-            completed={isClaimed('Instagram')}
-            loading={claiming === 'Instagram'}
-            t={t}
-          />
-
-          {/* Task 3: WhatsApp */}
-          <MissionCard 
-            icon={<Ionicons name="logo-whatsapp" size={28} color="#25D366" />}
-            title={language === 'hi' ? 'व्हाट्सएप स्टेटस पर शेयर करें' : "Share on WhatsApp Status"}
-            reward={rewards.WhatsApp || 50}
-            onPress={() => handleSocialAction('WhatsApp')}
-            completed={isClaimed('WhatsApp')}
-            loading={claiming === 'WhatsApp'}
-            t={t}
-          />
-
+          {[
+            { id: 'YouTube', title: language === 'hi' ? 'TREENITI TV को सब्सक्राइब करें' : "Subscribe to TREENITI TV", icon: <Ionicons name="logo-youtube" size={28} color="#FF0000" /> },
+            { id: 'Facebook', title: language === 'hi' ? 'फेसबुक पेज को लाइक करें' : "Like Facebook Page", icon: <Ionicons name="logo-facebook" size={28} color="#1877F2" /> },
+            { id: 'Instagram', title: language === 'hi' ? 'इंस्टाग्राम पर फॉलो करें' : "Follow us on Instagram", icon: <Ionicons name="logo-instagram" size={28} color="#E1306C" /> },
+            { id: 'X', title: language === 'hi' ? 'X (ट्विटर) पर फॉलो करें' : "Follow on X (Twitter)", icon: <Ionicons name="logo-twitter" size={28} color="#000000" /> },
+            { id: 'WhatsApp', title: language === 'hi' ? 'व्हाट्सएप स्टेटस शेयर करें' : "Share WhatsApp Status", icon: <Ionicons name="logo-whatsapp" size={28} color="#25D366" /> },
+            { id: 'Telegram', title: language === 'hi' ? 'टेलीग्राम चैनल ज्वाइन करें' : "Join Telegram Channel", icon: <Ionicons name="paper-plane" size={28} color="#0088cc" /> },
+          ].map((mission) => (
+            <MissionCard 
+              key={mission.id}
+              icon={mission.icon}
+              title={mission.title}
+              reward={rewards[mission.id] || 50}
+              onPress={() => handleSocialAction(mission.id)}
+              completed={isClaimed(mission.id)}
+              loading={claiming === mission.id}
+              t={t}
+            />
+          ))}
         </View>
 
       </ScrollView>
@@ -169,6 +269,41 @@ export default function FollowUs() {
 
         <TabItem icon="leaf-outline" label={t.fertilize || "Fertilize"} onPress={() => router.push('/plant')} />
         <TabItem icon="cash-outline" label={t.earn || "Earn"} onPress={() => router.push('/earn')} />
+      </View>
+
+      {/* 🪙 Golden Flying Coins Overlay Wrapper */}
+      <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="none">
+        {coinsToAnimate.map(coin => {
+          const targetY = Platform.OS === 'ios' ? 50 : 60;
+          const spinRotation = coin.anim.y.interpolate({
+            inputRange: [targetY, Math.max(targetY + 1, coin.startY)],
+            outputRange: ['720deg', '0deg'],
+            extrapolate: 'clamp'
+          });
+          return (
+            <Animated.View
+              key={coin.id}
+              style={{
+                position: 'absolute',
+                zIndex: 99999,
+                elevation: 99999,
+                left: 0,
+                top: 0,
+                transform: [
+                  { translateX: coin.anim.x },
+                  { translateY: coin.anim.y },
+                  { scale: coin.scale },
+                  { rotate: spinRotation }
+                ],
+                opacity: coin.opacity
+              }}
+            >
+              <View style={styles.goldCoin}>
+                <FontAwesome5 name="coins" size={14} color="#FFD700" />
+              </View>
+            </Animated.View>
+          );
+        })}
       </View>
 
     </SafeAreaView>
@@ -284,5 +419,19 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 8, color: '#fff', marginTop: 4, fontWeight: 'bold', textAlign: 'center' },
   centerBtn: { marginTop: -45, alignItems: 'center' },
   centerBtnInner: { width: 68, height: 68, backgroundColor: '#1B3C1B', borderRadius: 34, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 4, borderColor: '#fff' },
-  centerText: { fontSize: 6, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -2 }
+  centerText: { fontSize: 6, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -2 },
+  goldCoin: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F57F17',
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 8
+  },
 });

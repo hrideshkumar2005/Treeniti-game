@@ -119,7 +119,7 @@ export default function ProfileScreen() {
         const res = await fetch(`${BASE_URL}/auth/profile`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ name: userData.name, language: userData.language })
+            body: JSON.stringify({ name: userData.name })
         });
         if(res.ok) Alert.alert("Success", "Profile details saved.");
     } catch(e) {}
@@ -163,6 +163,9 @@ export default function ProfileScreen() {
       {/* --- HEADER --- */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+           <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 10 }}>
+             <Ionicons name="arrow-back" size={24} color="#1B5E20" />
+           </TouchableOpacity>
            <Text style={styles.brandText}>{t.profileTitle}</Text>
         </View>
         <View style={styles.headerRight}>
@@ -213,18 +216,7 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t.languageLabel}</Text>
-            <View style={{height: 10}} />
-            <View style={styles.langPicker}>
-                <TouchableOpacity onPress={() => changeLanguage('en')} style={[styles.langOpt, language === 'en' && styles.langActive]}>
-                    <Text style={[styles.langOptText, language === 'en' && styles.langActiveText]}>English</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => changeLanguage('hi')} style={[styles.langOpt, language === 'hi' && styles.langActive]}>
-                    <Text style={[styles.langOptText, language === 'hi' && styles.langActiveText]}>हिंदी (Hindi)</Text>
-                </TouchableOpacity>
-            </View>
-          </View>
+
 
           {/* --- SAVE BUTTON --- */}
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
@@ -240,39 +232,9 @@ export default function ProfileScreen() {
 
       </ScrollView>
 
-      {/* --- 🟢 Optimized Docked Navbar --- */}
-      <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
-        <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
-        <TabItem icon="water-outline" label="Water" onPress={() => router.push('/plant')} />
-
-        <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
-          <View style={styles.centerBtnInner}>
-            <Ionicons name="camera" size={26} color="#fff" />
-            <Text style={styles.centerText}>UPLOAD</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TabItem icon="leaf-outline" label="Fertilize" onPress={() => router.push('/plant')} />
-        <TabItem icon="cash-outline" label="Earn" active={pathname === '/profile'} onPress={() => {}} />
-      </View>
-
     </SafeAreaView>
   );
 }
-
-const TabItem = ({ icon, label, active, onPress }) => (
-  <TouchableOpacity 
-    style={styles.tabBtn} 
-    onPress={onPress}
-    activeOpacity={0.7}
-    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-  >
-    <View style={[styles.tabIconCircle, active && { backgroundColor: '#fff' }]}>
-      <Ionicons name={icon} size={20} color={active ? "#1B5E20" : "#fff"} />
-    </View>
-    <Text style={styles.tabLabel}>{label}</Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F8F4' },
@@ -284,7 +246,7 @@ const styles = StyleSheet.create({
   coinBadge: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2, alignItems: 'center' },
   coinText: { fontWeight: 'bold', color: '#1B5E20' },
 
-  scrollContent: { alignItems: 'center', paddingBottom: 150, paddingTop: 30 },
+  scrollContent: { alignItems: 'center', paddingBottom: 40, paddingTop: 30 },
   avatarWrapper: { position: 'relative' },
   mainAvatar: { width: width * 0.35, height: width * 0.35, borderRadius: (width * 0.35) / 2, borderWidth: 3, borderColor: '#FFF', elevation: 10 },
   editBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: '#1B5E20', padding: 8, borderRadius: 20, borderWidth: 2, borderColor: '#fff' },
@@ -311,26 +273,4 @@ const styles = StyleSheet.create({
 
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 30, paddingVertical: 12, gap: 8 },
   deleteBtnText: { color: '#FF5252', fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' },
-
-  bottomTab: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    backgroundColor: '#6DBE71',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10
-  },
-  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  tabIconCircle: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 1, fontWeight: '700', textAlign: 'center' },
-  centerBtn: { marginTop: -20, alignItems: 'center' },
-  centerBtnInner: { width: 54, height: 54, backgroundColor: '#1B3C1B', borderRadius: 27, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#F4F8F4' },
-  centerText: { fontSize: 6.5, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -1 },
 });

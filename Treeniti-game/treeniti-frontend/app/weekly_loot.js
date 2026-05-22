@@ -10,6 +10,8 @@ import {
   ImageBackground,
   Platform,
   StatusBar,
+  Modal,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,6 +19,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
 
 const { width, height } = Dimensions.get('window');
@@ -67,8 +70,120 @@ export default function WeeklyLootScreen() {
   const [user, setUser] = useState(null);
   const [isOpening, setIsOpening] = useState(false);
   const [countdown, setCountdown] = useState("LOADING...");
+  const [isOpened, setIsOpened] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [wonAmount, setWonAmount] = useState(0);
+  const [coinsToAnimate, setCoinsToAnimate] = useState([]);
+  const badgeScale = useRef(new Animated.Value(1)).current;
   const boxAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+
+  const playCoinSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/coin_collect.mp3')
+      );
+      await sound.playAsync();
+      setTimeout(() => {
+        sound.unloadAsync().catch(() => {});
+      }, 2500);
+    } catch (e) {
+      console.log("Audio play error:", e);
+    }
+  };
+
+  const triggerCoinAnimation = (startX = width / 2 - 12, startY = height / 2) => {
+    playCoinSound();
+    const coinCount = 15;
+    startX = width / 2 - 12; // Center horizontally
+    startY = height * 0.45; // Center vertically at the chest/box stage
+    const targetX = width - 65; 
+    const targetY = Platform.OS === 'ios' ? 50 : 60; 
+
+    const newCoins = Array.from({ length: coinCount }).map((_, index) => {
+      const angle = (index / coinCount) * 2 * Math.PI;
+      const burstDist = 25 + Math.random() * 50;
+      const burstX = startX + Math.cos(angle) * burstDist;
+      const burstY = startY + Math.sin(angle) * burstDist;
+
+      return {
+        id: `${Date.now()}-${index}`,
+        anim: new Animated.ValueXY({ x: startX, y: startY }),
+        burstX,
+        burstY,
+        scale: new Animated.Value(0),
+        opacity: new Animated.Value(0),
+        spin: new Animated.Value(0),
+        startX,
+        startY
+      };
+    });
+
+    setCoinsToAnimate(prev => [...prev, ...newCoins]);
+
+    newCoins.forEach((coin, index) => {
+      Animated.parallel([
+        Animated.timing(coin.anim, {
+          toValue: { x: coin.burstX, y: coin.burstY },
+          duration: 350,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.scale, {
+          toValue: 1.2,
+          duration: 250,
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ]).start(() => {
+        Animated.sequence([
+          Animated.delay(100 + index * 60), 
+          Animated.parallel([
+            Animated.timing(coin.anim, {
+              toValue: { x: targetX, y: targetY },
+              duration: 1500 + Math.random() * 300,
+              easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.spin, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.scale, {
+              toValue: 0.7,
+              duration: 1500,
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.opacity, {
+              toValue: 0,
+              delay: 1300,
+              duration: 200,
+              useNativeDriver: true
+            })
+          ])
+        ]).start(() => {
+          setCoinsToAnimate(prev => prev.filter(c => c.id !== coin.id));
+          Animated.sequence([
+            Animated.timing(badgeScale, {
+              toValue: 1.25,
+              duration: 80,
+              useNativeDriver: true
+            }),
+            Animated.timing(badgeScale, {
+              toValue: 1.0,
+              duration: 80,
+              useNativeDriver: true
+            })
+          ]).start();
+        });
+      });
+    });
+  };
 
   // Pulse effect for the glow
   useEffect(() => {
@@ -128,7 +243,7 @@ export default function WeeklyLootScreen() {
         const secs = Math.floor((remaining % 60000) / 1000);
         
         if (days > 0) {
-            setCountdown(`${days}d ${hours}h ${mins}m`);
+            setCountdown(`${days}d ${hours}h ${mins}m ${secs}s`);
         } else {
             setCountdown(`${hours}h ${mins}m ${secs}s`);
         }
@@ -160,9 +275,14 @@ export default function WeeklyLootScreen() {
 
             if (data.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert("🎊 MAGICAL LOOT!", data.message || "You discovered a secret treasure!", [{ text: "COLLECT", onPress: fetchProfile }]);
+                setIsOpened(true);
+                setWonAmount(data.reward);
+                triggerCoinAnimation();
+                setTimeout(() => {
+                    setShowRewardModal(true);
+                }, 800);
             } else {
-                Alert.alert("Locked", data.error || "Chest is currently empty.");
+                Alert.alert("Locked", data.error || "Surprise box is currently empty.");
             }
         } catch (e) {
             Alert.alert("Connection Error", "Please try again later.");
@@ -189,10 +309,13 @@ export default function WeeklyLootScreen() {
               <Ionicons name="close-circle-outline" size={32} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
             <View style={styles.headerTitleBox}>
-                <Text style={styles.headerTitle}>WEEKLY LOOT</Text>
+                <Text style={styles.headerTitle}>SURPRISE BOX</Text>
                 <View style={styles.titleUnderline} />
             </View>
-            <View style={{ width: 32 }} />
+            <Animated.View style={[styles.coinBadge, { transform: [{ scale: badgeScale }] }]}>
+              <FontAwesome5 name="coins" size={14} color="#FFD700" style={{ marginRight: 6 }} />
+              <Text style={styles.coinText}>{user?.walletCoins || 0}</Text>
+            </Animated.View>
           </View>
 
           <View style={styles.content}>
@@ -203,18 +326,33 @@ export default function WeeklyLootScreen() {
                     transform: [{ scale: glowAnim.interpolate({ inputRange:[0,1], outputRange:[1, 1.3] }) }]
                 }]} />
 
-                <Animated.View style={[styles.chestBox, { transform: [{ scale: boxAnim }] }]}>
-                    <LinearGradient colors={['rgba(255,215,0,0.1)', 'transparent']} style={styles.chestInnerGlow} />
-                    <MaterialCommunityIcons 
-                        name={countdown === "READY" ? "treasure-chest" : "lock-clock"} 
-                        size={160} 
-                        color={countdown === "READY" ? "#FFD700" : "rgba(255,255,255,0.2)"} 
+                <Animated.View style={[
+                  styles.chestBox, 
+                  countdown === "READY" && styles.chestBoxReady,
+                  { transform: [{ scale: boxAnim }] }
+                ]}>
+                  {countdown === "READY" ? (
+                    <LinearGradient 
+                      colors={['#FF1744', '#B71C1C']} 
+                      style={StyleSheet.absoluteFillObject}
+                      start={{x:0, y:0}} end={{x:1, y:1}}
                     />
-                    {countdown === "READY" && (
-                        <View style={styles.readyBadge}>
-                            <Text style={styles.readyBadgeText}>READY</Text>
-                        </View>
-                    )}
+                  ) : (
+                    <LinearGradient 
+                      colors={['rgba(255,255,255,0.05)', 'rgba(0,0,0,0.3)']} 
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  )}
+                  <MaterialCommunityIcons 
+                      name={countdown === "READY" ? (isOpened ? "gift-open" : "gift") : "gift"} 
+                      size={120} 
+                      color={countdown === "READY" ? "#FFD700" : "rgba(255,255,255,0.15)"} 
+                  />
+                  {countdown === "READY" && !isOpened && (
+                      <View style={styles.readyBadge}>
+                          <Text style={styles.readyBadgeText}>READY</Text>
+                      </View>
+                  )}
                 </Animated.View>
                 
                 <View style={styles.statusSection}>
@@ -261,6 +399,62 @@ export default function WeeklyLootScreen() {
              </View>
           </View>
 
+      {/* 🪙 Golden Flying Coins Overlay Wrapper */}
+      <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="none">
+        {coinsToAnimate.map(coin => {
+          const targetY = Platform.OS === 'ios' ? 50 : 60;
+          const spinRotation = coin.spin.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0deg', '720deg']
+          });
+          return (
+            <Animated.View
+              key={coin.id}
+              style={{
+                position: 'absolute',
+                zIndex: 99999,
+                elevation: 99999,
+                left: 0,
+                top: 0,
+                transform: [
+                  { translateX: coin.anim.x },
+                  { translateY: coin.anim.y },
+                  { scale: coin.scale },
+                  { rotate: spinRotation }
+                ],
+                opacity: coin.opacity
+              }}
+            >
+              <View style={styles.goldCoin}>
+                <FontAwesome5 name="coins" size={14} color="#FFD700" />
+              </View>
+            </Animated.View>
+          );
+        })}
+      </View>
+
+      {/* 🎉 Premium Surprise Reward Modal 🎉 */}
+      <Modal visible={showRewardModal} transparent animationType="fade">
+        <View style={styles.modalBg}>
+          <LinearGradient colors={['#004D40', '#002B24']} style={styles.modalCard}>
+            <MaterialCommunityIcons name="gift-open" size={100} color="#FFD700" style={{ alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={styles.modalTitle}>🎉 SURPRISE BOX 🎉</Text>
+            <Text style={styles.modalCoins}>+{wonAmount} COINS</Text>
+            <Text style={styles.modalSubtitle}>Added to your wallet successfully!</Text>
+
+            <TouchableOpacity style={styles.collectBtn} onPress={() => {
+                setShowRewardModal(false);
+                fetchProfile();
+                setIsOpened(false);
+            }}>
+              <LinearGradient colors={['#FFD700', '#F9A825']} style={styles.collectBtnInner}>
+                <Text style={styles.collectBtnText}>AWESOME!</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
+
         </SafeAreaView>
       </LinearGradient>
     </View>
@@ -286,6 +480,15 @@ const styles = StyleSheet.create({
   
   chestBox: { width: 220, height: 220, justifyContent: 'center', alignItems: 'center', borderRadius: 110, backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 2, borderColor: 'rgba(255,215,0,0.2)', shadowColor: '#FFD700', shadowOpacity: 0.2, shadowRadius: 20 },
   chestInnerGlow: { ...StyleSheet.absoluteFillObject, borderRadius: 110 },
+  chestBoxReady: {
+    borderColor: '#FFD700',
+    borderWidth: 4,
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.5,
+    shadowRadius: 25,
+    elevation: 15,
+    overflow: 'hidden'
+  },
   
   readyBadge: { position: 'absolute', top: 30, right: 20, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, transform: [{ rotate: '15deg' }] },
   readyBadgeText: { color: '#000', fontSize: 10, fontWeight: '900' },
@@ -306,5 +509,99 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   infoIconBox: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,215,0,0.1)', justifyContent: 'center', alignItems: 'center' },
   infoTitle: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  infoSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 }
+  infoSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 },
+  coinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
+  },
+  coinText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14
+  },
+  goldCoin: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFD700',
+    borderWidth: 2,
+    borderColor: '#FFF8E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 5
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  modalCard: {
+    width: '85%',
+    borderRadius: 30,
+    padding: 30,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  modalCoins: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: '#FFD700',
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowRadius: 15,
+    marginVertical: 15,
+    textAlign: 'center'
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginBottom: 30
+  },
+  collectBtn: {
+    width: '100%',
+    height: 55,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8
+  },
+  collectBtnInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  collectBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1.5
+  }
 });

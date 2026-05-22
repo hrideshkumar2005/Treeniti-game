@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -46,10 +46,20 @@ export default function HelpScreen() {
 
                 <View style={styles.contactCard}>
                     <Text style={styles.contactTitle}>Still need help?</Text>
-                    <Text style={styles.contactSub}>Reach out to our supporting team at:</Text>
-                    <TouchableOpacity style={styles.emailBtn}>
+                    <Text style={styles.contactSub}>Reach out to our official team at:</Text>
+                    <TouchableOpacity 
+                      style={styles.emailBtn}
+                      onPress={() => Linking.openURL('mailto:treenitiofficial@gmail.com')}
+                    >
                         <Ionicons name="mail" size={18} color="#fff" />
-                        <Text style={styles.emailText}>support@treeniti.com</Text>
+                        <Text style={styles.emailText}>treenitiofficial@gmail.com</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.emailBtn, { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.15)' }]}
+                      onPress={() => Linking.openURL('tel:7081775629')}
+                    >
+                        <Ionicons name="call" size={18} color="#fff" />
+                        <Text style={styles.emailText}>+91 7081775629</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

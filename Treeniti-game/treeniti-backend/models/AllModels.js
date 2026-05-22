@@ -31,6 +31,7 @@ const UserSchema = new mongoose.Schema({
     daily3HourCount: { type: Number, default: 0 }, // SRS 3.6.2
     lastSpinAt: { type: Date }, // SRS 3.6.3
     dailySpinCount: { type: Number, default: 0 }, // SRS 3.6.3
+    lastWeeklyLootAt: { type: Date },
     claimedSocials: [{ type: String }], 
     readArticles: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Article' }], 
     deviceIds: [{ type: String }], 
@@ -73,6 +74,7 @@ const TreeSchema = new mongoose.Schema({
     mood: { type: String, enum: ['Happy', 'Waiting', 'Sad', 'Excited'], default: 'Happy' },
     unlockedElements: [{ type: String }], // SRS 3.11 (e.g., 'birds', 'butterflies', 'flowers')
     fruitsAvailable: { type: Number, default: 0 }, 
+    isHarvested: { type: Boolean, default: false },
     lastWatered: { type: Date, default: Date.now },
     lastFertilized: { type: Date },
     lastShaken: { type: Date }, 
@@ -103,7 +105,7 @@ const TransactionSchema = new mongoose.Schema({
     type: { type: String, enum: ['Credit', 'Debit'] },
     source: { 
         type: String, 
-        enum: ['Daily Login', 'Water Game', 'Article', 'Referral', 'Social Task', 'Social Reward', 'Withdrawal', 'Tree Harvest', 'Shake Tree', 'Level Up', 'Spin Wheel', 'Rewarded Ad', 'Virtual Game Swap', '3-Hour Bonus', 'Manual Edit'] 
+        enum: ['Daily Login', 'Water Game', 'Article', 'Referral', 'Social Task', 'Social Reward', 'Withdrawal', 'Tree Harvest', 'Shake Tree', 'Level Up', 'Spin Wheel', 'Rewarded Ad', 'Virtual Game Swap', '3-Hour Bonus', 'Manual Edit', 'Weekly Loot'] 
     },
     amountCoins: { type: Number, default: 0 },
     amountCash: { type: Number, default: 0 },
@@ -285,7 +287,7 @@ SecurityLogSchema.index({ createdAt: -1 });
 const ActivitySchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     userName: String, // Denormalized for fast feed reading
-    type: { type: String, enum: ['TREE_PLANTED', 'WITHDRAWAL', 'HARVEST', 'LEVEL_UP', 'ANNOUNCEMENT'] },
+    type: { type: String, enum: ['TREE_PLANTED', 'WITHDRAWAL', 'HARVEST', 'LEVEL_UP', 'ANNOUNCEMENT', 'COIN_EARNED'] },
     text: String, // e.g., "ने आज 2 पेड़ लगाया"
     icon: String,
     createdAt: { type: Date, default: Date.now }

@@ -6,7 +6,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import BASE_URL from '../config/api';
 
@@ -16,7 +15,9 @@ const MAX_WIDTH = 500;
 export default function Certificate() {
   const router = useRouter();
   const [userName, setUserName] = useState("Treeniti User");
-  const [trees, setTrees] = useState([]);
+  const [virtualTrees, setVirtualTrees] = useState([]);
+  const [realProofs, setRealProofs] = useState([]);
+  const [activeTab, setActiveTab] = useState('virtual'); // 'virtual' | 'real'
   const [loading, setLoading] = useState(true);
 
   const fetchProfileAndTrees = async () => {
@@ -32,12 +33,26 @@ export default function Certificate() {
         setUserName(profData.user.name);
       }
 
+      // Fetch Virtual Trees
       const treeRes = await fetch(`${BASE_URL}/tree`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const treeData = await treeRes.json();
       if (treeData.success) {
-        setTrees(treeData.trees);
+        // FILTER: Only show trees that are completely grown (growth >= 100)
+        const eligibleVirtual = treeData.trees.filter(t => t.growth >= 100);
+        setVirtualTrees(eligibleVirtual);
+      }
+
+      // Fetch Real plantation proofs
+      const proofRes = await fetch(`${BASE_URL}/tree/real-plantation/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const proofData = await proofRes.json();
+      if (proofData.success) {
+        // FILTER: Only show real trees verified/approved by admin
+        const eligibleReal = proofData.proofs.filter(p => p.status === 'Verified');
+        setRealProofs(eligibleReal);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -59,21 +74,79 @@ export default function Certificate() {
           <View style={{ width: 24 }} />
         </View>
 
-        {trees.length === 0 ? (
-          <View style={styles.emptyContent}>
-            <MaterialCommunityIcons name="tree-outline" size={80} color="#E8F5E9" />
-            <Text style={styles.emptyText}>No trees planted yet.{"\n"}Plant a seed to earn a certificate!</Text>
-            <TouchableOpacity style={styles.plantNowBtn} onPress={() => router.push('/home')}>
-              <Text style={styles.plantNowText}>Plant Seed Now</Text>
-            </TouchableOpacity>
+        {/* Beautiful Glassmorphic Tab Container */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'virtual' && styles.activeTabButton]}
+            onPress={() => setActiveTab('virtual')}
+          >
+            <FontAwesome5 name="seedling" size={14} color={activeTab === 'virtual' ? '#fff' : '#1B5E20'} />
+            <Text style={[styles.tabButtonText, activeTab === 'virtual' && styles.activeTabButtonText]}>Virtual Trees</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'real' && styles.activeTabButton]}
+            onPress={() => setActiveTab('real')}
+          >
+            <FontAwesome5 name="tree" size={14} color={activeTab === 'real' ? '#fff' : '#1B5E20'} />
+            <Text style={[styles.tabButtonText, activeTab === 'real' && styles.activeTabButtonText]}>Real Trees</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.centerSpinner}>
+            <ActivityIndicator size="large" color="#1B5E20" />
           </View>
+        ) : activeTab === 'virtual' ? (
+          virtualTrees.length === 0 ? (
+            <View style={styles.emptyContent}>
+              <MaterialCommunityIcons name="seed-outline" size={80} color="#C8E6C9" />
+              <Text style={styles.emptyTitle}>Virtual Tree Growing 🌳</Text>
+              <Text style={styles.emptyText}>
+                Your virtual tree is still growing! Water it daily and harvest its fruits once it grows to 100% to earn your Official Certificate here.
+              </Text>
+              <TouchableOpacity style={styles.plantNowBtn} onPress={() => router.push('/home')}>
+                <Text style={styles.plantNowText}>Go to Garden</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.pageSub}>Congratulations! Here are your virtual plantation certificates.</Text>
+              {virtualTrees.map((tree) => (
+                <CertificateCard key={tree._id} tree={tree} userName={userName} />
+              ))}
+            </ScrollView>
+          )
         ) : (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.pageSub}>Congratulations! Here are your plantation certificates.</Text>
-            {trees.map((tree) => (
-              <CertificateCard key={tree._id} tree={tree} userName={userName} />
-            ))}
-          </ScrollView>
+          realProofs.length === 0 ? (
+            <View style={styles.emptyContent}>
+              <MaterialCommunityIcons name="image-search-outline" size={80} color="#FFCCBC" />
+              <Text style={styles.emptyTitle}>No Verified Real Trees 🌲</Text>
+              <Text style={styles.emptyText}>
+                No verified real tree plantations yet. Upload your proof photos in the Photo Upload section, and once the administrator approves it, your certificate will unlock here!
+              </Text>
+              <TouchableOpacity style={[styles.plantNowBtn, { backgroundColor: '#D84315' }]} onPress={() => router.push('/upload_tree')}>
+                <Text style={styles.plantNowText}>Upload Real Proof</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.pageSub}>Congratulations! Here are your verified real plantation certificates.</Text>
+              {realProofs.map((proof) => (
+                <CertificateCard 
+                  key={proof._id} 
+                  tree={{
+                    _id: proof._id,
+                    treeName: proof.treeId?.treeName || "Real Tree",
+                    plantedAt: proof.verifiedAt || proof.submittedAt,
+                    isReal: true,
+                    day: proof.day
+                  }} 
+                  userName={userName} 
+                />
+              ))}
+            </ScrollView>
+          )
         )}
       </SafeAreaView>
     </View>
@@ -87,16 +160,13 @@ const CertificateCard = ({ tree, userName }) => {
   const handleDownload = async () => {
     try {
       setLoading(true);
-      // 1. Request Permissions (Write-only for saving certificates)
-      const { status } = await MediaLibrary.requestPermissionsAsync(true);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert("Permission Denied", "We need storage permissions to save the certificate to your gallery.");
         setLoading(false);
         return;
       }
 
-      // 2. Capture the certificate view
-      // Small delay to ensure rendering is complete
       const uri = await captureRef(viewRef, {
         format: 'png',
         quality: 1.0,
@@ -105,10 +175,8 @@ const CertificateCard = ({ tree, userName }) => {
 
       if (!uri) throw new Error("Capture failed");
 
-      // 3. Save to Media Library
       const asset = await MediaLibrary.createAssetAsync(uri);
       
-      // 4. Try to create/add to album (optional, wrapped in try/catch to avoid fatal fail if album exists)
       try {
         const album = await MediaLibrary.getAlbumAsync('Treeniti');
         if (album == null) {
@@ -128,8 +196,6 @@ const CertificateCard = ({ tree, userName }) => {
     } catch (error) {
       console.error("Download Error:", error);
       Alert.alert("Download Failed", "Something went wrong. You can try sharing the certificate instead.");
-      
-      // Fallback: Try Sharing if Gallery Save fails
       try {
         const uri = await captureRef(viewRef, { format: 'png', quality: 0.8 });
         if (uri) await Sharing.shareAsync(uri);
@@ -141,8 +207,12 @@ const CertificateCard = ({ tree, userName }) => {
 
   const handleShareText = async () => {
     try {
+      const shareMsg = tree.isReal 
+        ? `I've successfully planted and verified a real tree "${tree.treeName}" (Milestone: Day ${tree.day}) using the Treeniti app! My Tree ID: ${tree._id.substring(tree._id.length - 8)}. Let's make the Earth greener together!`
+        : `I've successfully planted and harvested a virtual tree "${tree.treeName}" on Treeniti app! My Tree ID: ${tree._id.substring(tree._id.length - 8)}. Join me in saving the planet!`;
+
       await Share.share({
-        message: `I've successfully planted a tree "${tree.treeName}" on Treeniti app! My Tree ID: ${tree._id.substring(tree._id.length - 8)}. Join me in saving the planet!`,
+        message: shareMsg,
         url: 'https://treeniti.com',
       });
     } catch (error) {
@@ -152,6 +222,19 @@ const CertificateCard = ({ tree, userName }) => {
 
   return (
     <View style={styles.certCard}>
+      <View style={styles.cardHeaderRow}>
+        {/* 🏷️ Certificate Type Ribbon Badge */}
+        <View style={[styles.typeBadge, tree.isReal ? styles.realBadge : styles.virtualBadge]}>
+          <FontAwesome5 name={tree.isReal ? "tree" : "seedling"} size={10} color="#fff" />
+          <Text style={styles.typeBadgeText}>
+            {tree.isReal ? `REAL TREE (DAY ${tree.day})` : "VIRTUAL TREE"}
+          </Text>
+        </View>
+        <Text style={styles.treeInfoText}>
+          Tree: <Text style={styles.boldText}>{tree.treeName}</Text> ({tree.isReal ? 'Verified Real' : '100% Grown'})
+        </Text>
+      </View>
+
       <ViewShot ref={viewRef} options={{ format: 'png', quality: 1 }}>
         <View style={styles.certificateWrapper}>
           <ImageBackground
@@ -173,7 +256,7 @@ const CertificateCard = ({ tree, userName }) => {
       </ViewShot>
 
       <View style={styles.cardActions}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleDownload} disabled={loading}>
+        <TouchableOpacity style={[styles.actionBtn, tree.isReal && { backgroundColor: '#D84315' }]} onPress={handleDownload} disabled={loading}>
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
@@ -182,8 +265,8 @@ const CertificateCard = ({ tree, userName }) => {
           <Text style={styles.actionText}>{loading ? "Saving..." : "Download Image"}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShareText}>
-          <Ionicons name="share-social-outline" size={18} color="#1B5E20" />
-          <Text style={[styles.actionText, { color: '#1B5E20' }]}>Share Link</Text>
+          <Ionicons name="share-social-outline" size={18} color={tree.isReal ? '#D84315' : '#1B5E20'} />
+          <Text style={[styles.actionText, { color: tree.isReal ? '#D84315' : '#1B5E20' }]}>Share Now</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -197,16 +280,79 @@ const styles = StyleSheet.create({
   backBtn: { padding: 5 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B5E20' },
 
-  pageSub: { paddingHorizontal: 20, fontSize: 12, color: '#666', marginVertical: 15, textAlign: 'center' },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 15,
+    padding: 5,
+    marginHorizontal: 20,
+    marginVertical: 15,
+    borderWidth: 1,
+    borderColor: '#C8E6C9'
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  activeTabButton: {
+    backgroundColor: '#1B5E20',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+  },
+  activeTabButtonText: {
+    color: '#fff',
+  },
+
+  pageSub: { paddingHorizontal: 20, fontSize: 12, color: '#666', marginVertical: 8, textAlign: 'center' },
   scrollContent: { paddingBottom: 50 },
 
+  centerSpinner: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   emptyContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyText: { textAlign: 'center', color: '#999', marginTop: 20, lineHeight: 22 },
-  plantNowBtn: { marginTop: 30, backgroundColor: '#1B5E20', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#2E7D32', marginTop: 15, marginBottom: 5 },
+  emptyText: { textAlign: 'center', color: '#666', lineHeight: 22 },
+  plantNowBtn: { marginTop: 30, backgroundColor: '#1B5E20', paddingHorizontal: 35, paddingVertical: 12, borderRadius: 25 },
   plantNowText: { color: '#fff', fontWeight: 'bold' },
 
   certCard: { marginHorizontal: 5, marginBottom: 40 },
   certificateWrapper: { width: width - 20, backgroundColor: '#fff', borderRadius: 15, elevation: 15, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, overflow: 'hidden' },
+
+  typeBadge: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 6,
+    marginBottom: 8,
+    marginLeft: 10,
+  },
+  virtualBadge: {
+    backgroundColor: '#1B5E20',
+  },
+  realBadge: {
+    backgroundColor: '#D84315',
+  },
+  typeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
 
   fullTemplateBg: {
     width: '100%',
@@ -217,12 +363,11 @@ const styles = StyleSheet.create({
 
   nameOverlayContainer: {
     position: 'absolute',
-    top: '-20 %',
+    top: '-20%',
     width: '100%',
     alignItems: 'center',
     left: '-15%',
     marginBottom: 82
-
   },
   dynamicNameText: {
     fontSize: 22,
@@ -250,5 +395,20 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: 'row', gap: 10, marginTop: 20, paddingHorizontal: 10 },
   actionBtn: { flex: 1, backgroundColor: '#1B5E20', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
   shareBtn: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#1B5E20' },
-  actionText: { color: '#fff', fontSize: 13, fontWeight: 'bold' }
+  actionText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  
+  cardHeaderRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingRight: 10 
+  },
+  treeInfoText: { 
+    fontSize: 11, 
+    color: '#666',
+  },
+  boldText: { 
+    fontWeight: 'bold', 
+    color: '#1B5E20' 
+  }
 });

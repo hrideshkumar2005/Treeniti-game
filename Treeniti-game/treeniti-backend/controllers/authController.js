@@ -50,31 +50,42 @@ exports.sendOTP = async (req, res) => {
 
 exports.login = async (req, res) => {
     try {
-        const { mobile, otp, name, refCode, deviceId, captchaId, userCode } = req.body;
-        if (!mobile || !otp) return res.status(400).json({ error: "Mobile and OTP are required." });
+        const { mobile, loginPassword, otp, name, refCode, deviceId, captchaId, userCode } = req.body;
+        if (!mobile) return res.status(400).json({ error: "Mobile number is required." });
+        
+        let user = await User.findOne({ mobile });
 
-        // 🛡️ FULL DEMO MODE BYPASS (SRS 5)
-        // If developer master code is used, bypass all security checks (Strikes, Captcha, Hashing)
-        if (otp === '123456') {
-            console.log(`[SECURITY] Demo Master OTP bypass used for ${mobile}`);
-            otpStore.delete(mobile);
+        if (loginPassword) {
+            if (!user) return res.status(400).json({ error: "User not found. Please register first." });
+            if (!user.loginPassword) return res.status(400).json({ error: "Password not set. Please login with OTP or reset password." });
+            const isMatch = await bcrypt.compare(loginPassword, user.loginPassword);
+            if (!isMatch) return res.status(400).json({ error: "Incorrect password." });
+        } else if (otp) {
+            // 🛡️ FULL DEMO MODE BYPASS (SRS 5)
+            // If developer master code is used, bypass all security checks (Strikes, Captcha, Hashing)
+            if (otp === '123456') {
+                console.log(`[SECURITY] Demo Master OTP bypass used for ${mobile}`);
+                otpStore.delete(mobile);
+            } else {
+                // Standard Security Flow (Disabled Strikes for Demo ease)
+                const stored = otpStore.get(mobile);
+                if (!stored || stored.expires < Date.now()) {
+                    return res.status(400).json({ error: "OTP expired or not found. Please click 'Send OTP' again." });
+                }
+
+                const isMatch = await bcrypt.compare(otp, stored.otp);
+                if (!isMatch) {
+                    await new SecurityLog({
+                        eventType: 'OTP_FAILED',
+                        ip: req.ip,
+                        details: `Failed OTP attempt for ${mobile}`
+                    }).save();
+                    return res.status(400).json({ error: "Invalid OTP. Try 123456 for demo." });
+                }
+                otpStore.delete(mobile); 
+            }
         } else {
-            // Standard Security Flow (Disabled Strikes for Demo ease)
-            const stored = otpStore.get(mobile);
-            if (!stored || stored.expires < Date.now()) {
-                return res.status(400).json({ error: "OTP expired or not found. Please click 'Send OTP' again." });
-            }
-
-            const isMatch = await bcrypt.compare(otp, stored.otp);
-            if (!isMatch) {
-                await new SecurityLog({
-                    eventType: 'OTP_FAILED',
-                    ip: req.ip,
-                    details: `Failed OTP attempt for ${mobile}`
-                }).save();
-                return res.status(400).json({ error: "Invalid OTP. Try 123456 for demo." });
-            }
-            otpStore.delete(mobile); 
+            return res.status(400).json({ error: "Please provide either a password or OTP." });
         }
 
         // Fetch limits
@@ -95,10 +106,8 @@ exports.login = async (req, res) => {
              }
         }
 
-        let user = await User.findOne({ mobile });
-
         if (!user) {
-            // New Registration
+            // New Registration (Fallback if using OTP and user not found)
             const myRefCode = "TRN" + Math.floor(1000 + Math.random() * 9000);
             user = new User({ 
                 mobile, 
@@ -178,7 +187,6 @@ exports.login = async (req, res) => {
         }
 
         // 🌳 SRS 3.3.1: Ensure at least one default tree exists for every user
-        const Tree = mongoose.model('Tree');
         const existingTrees = await Tree.countDocuments({ userId: user._id });
         if (existingTrees === 0) {
             await new Tree({ 
@@ -189,8 +197,8 @@ exports.login = async (req, res) => {
             }).save();
         }
 
-        // Generate Token
-        const token = jwt.sign({ userId: user._id, role: user.role, kyc: user.isKycVerified }, JWT_SECRET, { expiresIn: '7d' });
+        // Generate Token (1 Year validity as requested)
+        const token = jwt.sign({ userId: user._id, role: user.role, kyc: user.isKycVerified }, JWT_SECRET, { expiresIn: '365d' });
 
         // 🛡️ Log Login Success
         await new SecurityLog({
@@ -380,8 +388,8 @@ exports.getDailyMissions = async (req, res) => {
         // 2. Water Tree 2 Times Mission
         const isWateringDone = user.dailyWaterCount >= 2;
 
-        // 3. Spin Wheel Mission (Use 4 spins)
-        const isSpinDone = user.dailySpinCount >= 4 && user.lastSpinAt && user.lastSpinAt.toDateString() === today;
+        // 3. Spin Wheel Mission (Use 2 spins)
+        const isSpinDone = user.dailySpinCount >= 2 && user.lastSpinAt && user.lastSpinAt.toDateString() === today;
 
         // 4. Social Mission Status
         const socialClaimedCount = user.claimedSocials ? user.claimedSocials.length : 0;
@@ -391,9 +399,7 @@ exports.getDailyMissions = async (req, res) => {
             missions: [
                 { id: 'DAILY_LOGIN', title: 'Daily Attendance', completed: isDailyClaimed, reward: 10 },
                 { id: 'WATER_TREE', title: 'Water Tree (2 Times)', completed: isWateringDone, reward: 20, current: user.dailyWaterCount, target: 2 },
-                { id: 'SHAKE_TREE', title: 'Shake Tree (Daily)', completed: user.dailyShakeCount >= 1, reward: 20, current: user.dailyShakeCount, target: 1 },
-                { id: 'SPIN_WHEEL', title: 'Lucky Spin (4 Times)', completed: isSpinDone, reward: 20, current: user.dailySpinCount, target: 4 },
-                { id: 'READ_ARTICLE', title: 'Read Climate News', completed: user.readArticles.length >= 1, reward: 10 }
+                { id: 'SPIN_WHEEL', title: 'Lucky Spin (2 Times)', completed: isSpinDone, reward: 20, current: Math.min(user.dailySpinCount, 2), target: 2 }
             ]
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -441,7 +447,7 @@ exports.claim3HourBonus = async (req, res) => {
         }
 
         if (user.daily3HourCount >= 5) {
-             return res.status(403).json({ error: "Daily limit for 3-hour bonus reached (max 5/day)." });
+             return res.status(403).json({ error: "Daily limit for 3-hour check-in reached (max 5/day)." });
         }
 
         const { Transaction, SystemConfig } = require('../models/AllModels');
@@ -461,7 +467,7 @@ exports.claim3HourBonus = async (req, res) => {
 
         await processEarningsReferral(user._id, reward, '3-Hour Bonus');
 
-        res.json({ success: true, message: `${reward} coins rewarded! Come back in 3 hours.`, walletCoins: user.walletCoins });
+        res.json({ success: true, message: `Check-in successful! ${reward} coins rewarded. Come back in 3 hours.`, walletCoins: user.walletCoins });
     } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
@@ -469,10 +475,35 @@ exports.spinWheel = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId);
         const today = new Date().toDateString();
+        const { watchAd } = req.body; // Client passes { watchAd: true } when they watched an ad
 
-        // Daily Limit Check
-        if (user.lastSpinAt && user.lastSpinAt.toDateString() === today && user.dailySpinCount >= 4) {
-             return res.status(403).json({ error: "Daily limit of 4 spins reached. Try again tomorrow!" });
+        // If they DID NOT watch an ad, enforce the 2 free spins limit and 5-hour cooldown!
+        if (!watchAd) {
+            const hasSpunToday = user.lastSpinAt && user.lastSpinAt.toDateString() === today;
+            
+            // Check Daily Free Spins Limit (Max 2 free spins)
+            if (hasSpunToday && user.dailySpinCount >= 2) {
+                 return res.status(403).json({ 
+                     error: "Daily free spins limit (2) reached! Watch a video ad to spin again!",
+                     adRequired: true 
+                 });
+            }
+
+            // Check 5-Hour Cooldown between free spins
+            if (user.lastSpinAt) {
+                const now = Date.now();
+                const diffMs = now - new Date(user.lastSpinAt).getTime();
+                const diffHours = diffMs / 3600000; // diff in hours
+
+                if (diffHours < 5 && hasSpunToday) {
+                    const remainingHours = Math.ceil(5 - diffHours);
+                    return res.status(403).json({ 
+                        error: `Please wait ${remainingHours} hours for your next free spin! Or watch a video ad to spin immediately!`,
+                        adRequired: true,
+                        cooldownRemaining: remainingHours
+                    });
+                }
+            }
         }
 
         const { Transaction, SystemConfig } = require('../models/AllModels');
@@ -489,19 +520,25 @@ exports.spinWheel = async (req, res) => {
 
         user.walletCoins += finalReward;
         user.totalEarnings += finalReward;
-        user.dailySpinCount = (user.lastSpinAt && user.lastSpinAt.toDateString() === today) ? user.dailySpinCount + 1 : 1;
-        user.lastSpinAt = new Date();
+        
+        // If it was a free spin, we update the daily spin count and timestamp.
+        // Ad-powered spins bypass limits and do not consume free spins!
+        const hasSpunToday = user.lastSpinAt && user.lastSpinAt.toDateString() === today;
+        if (!watchAd) {
+            user.dailySpinCount = hasSpunToday ? user.dailySpinCount + 1 : 1;
+            user.lastSpinAt = new Date();
+        }
         await user.save();
 
         if (finalReward > 0) {
             await new Transaction({
                 userId: user._id, type: 'Credit', source: 'Spin Wheel',
-                amountCoins: finalReward, notes: `Spin #${user.dailySpinCount} Result`
+                amountCoins: finalReward, notes: `Spin Result (${watchAd ? 'Ad Powered' : 'Free'})`
             }).save();
             await processEarningsReferral(user._id, finalReward, 'Spin Wheel');
         }
 
-        res.json({ success: true, wonCoins: finalReward, message: finalReward > 0 ? `Jackpot! You won ${finalReward} coins!` : "Better luck next time!", walletCoins: user.walletCoins });
+        res.json({ success: true, wonCoins: finalReward, message: finalReward > 0 ? `Congratulations! You won ${finalReward} coins!` : "Better luck next time!", walletCoins: user.walletCoins });
     } catch (err) { res.status(500).json({ error: err.message }); }
 };
 

@@ -5,6 +5,7 @@ import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-ico
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
 
 const { width } = Dimensions.get('window');
@@ -20,8 +21,159 @@ export default function MissionsScreen() {
   const [timer, setTimer] = useState("Ready");
   const [progress, setProgress] = useState(1.0);
   const [config, setConfig] = useState(null);
+  const [adPlaying, setAdPlaying] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(5);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const rotationState = useRef(0);
+  const spinSoundRef = useRef(null);
+  const badgeScale = useRef(new Animated.Value(1)).current;
+  const [coinsToAnimate, setCoinsToAnimate] = useState([]);
+
+  const playSpinSound = async () => {
+    try {
+      if (spinSoundRef.current) {
+        await spinSoundRef.current.unloadAsync().catch(() => {});
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/spin_sound.wav')
+      );
+      spinSoundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      console.log("Spin sound play error:", e);
+    }
+  };
+
+  const playCoinSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/coin_collect.mp3')
+      );
+      await sound.playAsync();
+      setTimeout(() => {
+        sound.unloadAsync().catch(() => {});
+      }, 2500);
+    } catch (e) {
+      console.log("Audio play error:", e);
+    }
+  };
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      interruptionModeIOS: 1, // InterruptionModeIOS.DoNotMix
+      playsInSilentModeIOS: true,
+      shouldRouteThroughEarpieceAndroid: false,
+      interruptionModeAndroid: 1, // InterruptionModeAndroid.DoNotMix
+    }).catch(e => console.log("Audio mode error:", e));
+  }, []);
+
+  useEffect(() => {
+    let timer;
+    if (adPlaying && adCountdown > 0) {
+      timer = setTimeout(() => {
+        setAdCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (adPlaying && adCountdown === 0) {
+      setAdPlaying(false);
+      setTimeout(() => {
+        handleSpin(true);
+      }, 300);
+    }
+    return () => clearTimeout(timer);
+  }, [adPlaying, adCountdown]);
+
+  const triggerAdWatch = () => {
+    setAdPlaying(true);
+    setAdCountdown(5);
+  };
+
+  const triggerCoinAnimation = (startX = width / 2 - 12, startY = Dimensions.get('window').height / 2) => {
+    playCoinSound();
+    const coinCount = 12;
+    startX = width / 2 - 12; // Force strictly to the horizontal center of the screen
+    const targetX = width - 65; 
+    const targetY = Platform.OS === 'ios' ? 50 : 60; 
+
+    const newCoins = Array.from({ length: coinCount }).map((_, index) => {
+      const angle = (index / coinCount) * 2 * Math.PI;
+      const burstDist = 25 + Math.random() * 40;
+      const burstX = startX + Math.cos(angle) * burstDist;
+      const burstY = startY + Math.sin(angle) * burstDist;
+
+      return {
+        id: `${Date.now()}-${index}`,
+        anim: new Animated.ValueXY({ x: startX, y: startY }),
+        burstX,
+        burstY,
+        scale: new Animated.Value(0),
+        opacity: new Animated.Value(0),
+        startX,
+        startY
+      };
+    });
+
+    setCoinsToAnimate(prev => [...prev, ...newCoins]);
+
+    newCoins.forEach((coin, index) => {
+      Animated.parallel([
+        Animated.timing(coin.anim, {
+          toValue: { x: coin.burstX, y: coin.burstY },
+          duration: 350,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.scale, {
+          toValue: 1.2,
+          duration: 250,
+          useNativeDriver: true
+        }),
+        Animated.timing(coin.opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        })
+      ]).start(() => {
+        Animated.sequence([
+          Animated.delay(120 + index * 80), // Cascade delay for slower stream flow
+          Animated.parallel([
+            Animated.timing(coin.anim, {
+              toValue: { x: targetX, y: targetY },
+              duration: 1600 + Math.random() * 400, // Slow and graceful 2-second flight shift!
+              easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.scale, {
+              toValue: 0.7,
+              duration: 1600,
+              useNativeDriver: true
+            }),
+            Animated.timing(coin.opacity, {
+              toValue: 0,
+              delay: 1400,
+              duration: 200,
+              useNativeDriver: true
+            })
+          ])
+        ]).start(() => {
+          setCoinsToAnimate(prev => prev.filter(c => c.id !== coin.id));
+          Animated.sequence([
+            Animated.timing(badgeScale, {
+              toValue: 1.25,
+              duration: 80,
+              useNativeDriver: true
+            }),
+            Animated.timing(badgeScale, {
+              toValue: 1.0,
+              duration: 80,
+              useNativeDriver: true
+            })
+          ]).start();
+        });
+      });
+    });
+  };
 
   const rewards = [
     { label: "0", value: 0 },
@@ -123,7 +275,22 @@ export default function MissionsScreen() {
       });
       const data = await res.json();
       if(data.success) {
-          Alert.alert("🎉 Success", data.message);
+          let startX = width / 2;
+          let startY = Dimensions.get('window').height / 2;
+          if (type === 'daily') {
+              startX = width / 2;
+              startY = 200;
+          } else if (type === '3hour') {
+              startX = width / 2;
+              startY = 520;
+          } else if (type === 'social') {
+              startX = width / 2;
+              startY = 680;
+          }
+          triggerCoinAnimation(startX, startY);
+          setTimeout(() => {
+              Alert.alert("🎉 Success", data.message);
+          }, 600);
           fetchProfile();
       } else {
           Alert.alert("Wait", data.error);
@@ -133,22 +300,39 @@ export default function MissionsScreen() {
     }
   };
 
-  const handleSpin = async () => {
+  const handleSpin = async (watchAd = false) => {
     if (isSpinning) return;
+    const isAd = watchAd === true;
     try {
         const token = await AsyncStorage.getItem('userToken');
         const res = await fetch(`${BASE_URL}/auth/rewards/spin`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ watchAd: isAd })
         });
         const data = await res.json();
         
         if (!data.success) {
+            if (data.adRequired) {
+                Alert.alert(
+                  "🎰 Limit / Cooldown Active",
+                  data.error,
+                  [
+                    { text: "Watch Video Ad 🎥", onPress: () => triggerAdWatch() },
+                    { text: "Cancel", style: "cancel" }
+                  ]
+                );
+                return;
+            }
             Alert.alert("Limit Reached", data.error);
             return;
         }
 
         setIsSpinning(true);
+        playSpinSound();
         const rewardValue = data.wonCoins;
         let targetIndex = rewards.findIndex(r => r.value === rewardValue);
         if (targetIndex === -1) targetIndex = 0;
@@ -171,7 +355,14 @@ export default function MissionsScreen() {
           useNativeDriver: true,
         }).start(() => {
           setIsSpinning(false);
-          Alert.alert("🎉 Result", data.message || `You won ${rewardValue} coins!`);
+          if (spinSoundRef.current) {
+            spinSoundRef.current.stopAsync().catch(() => {});
+            spinSoundRef.current.unloadAsync().catch(() => {});
+          }
+          triggerCoinAnimation(width / 2, 380);
+          setTimeout(() => {
+              Alert.alert("🎉 Congratulations!", data.message || `You won ${rewardValue} coins!`);
+          }, 600);
           rotationState.current = targetDeg;
           fetchProfile();
         });
@@ -193,10 +384,10 @@ export default function MissionsScreen() {
             <Ionicons name="arrow-back" size={24} color="#1B5E20" />
            </TouchableOpacity>
            <Text style={styles.headerTitle}>Daily Missions 🎯</Text>
-           <View style={styles.coinBadge}>
+           <Animated.View style={[styles.coinBadge, { transform: [{ scale: badgeScale }] }]}>
               <FontAwesome5 name="coins" size={14} color="#FFD700" />
               <Text style={styles.coinText}>{user?.walletCoins || 0}</Text>
-           </View>
+           </Animated.View>
         </View>
 
         <ScrollView 
@@ -236,7 +427,7 @@ export default function MissionsScreen() {
           {/* Wheel */}
           <View style={styles.sectionHeader}>
              <Text style={styles.sectionTitle}>Lucky Tree Spin</Text>
-             <Text style={styles.sectionBadge}>{Math.max(0, 4 - (user?.dailySpinCount || 0))} LEFT</Text>
+              <Text style={styles.sectionBadge}>{user?.dailySpinCount >= 2 ? "AD SPIN ACTIVE 🎥" : `${2 - (user?.dailySpinCount || 0)} FREE LEFT`}</Text>
           </View>
           <View style={styles.wheelWrapper}>
              <View style={styles.wheelIndicator}><Ionicons name="caret-down" size={45} color="#FFD700" /></View>
@@ -295,7 +486,7 @@ export default function MissionsScreen() {
                   } else if (mission.id === 'SHAKE_TREE') {
                     Alert.alert("🤝 Mission", "Play the Shake Tree game once from the Plant screen to complete this!");
                   } else if (mission.id === 'SPIN_WHEEL') {
-                    Alert.alert("🎡 Mission", "Spin the Lucky Wheel above 4 times to claim this reward!");
+                    Alert.alert("🎡 Mission", "Spin the Lucky Wheel above 2 times to claim this reward!");
                   } else if (mission.id === 'READ_ARTICLE') {
                     Alert.alert("📖 Mission", "Read the climate news articles in the Articles section to complete this!");
                   } else {
@@ -307,8 +498,8 @@ export default function MissionsScreen() {
 
           <MissionCard 
             icon="clock" 
-            title="3-Hour Harvest" 
-            sub={timer === 'Ready' ? "Harvest Ready!" : `Next in ${timer}`}
+            title="3-Hour Return Check-in" 
+            sub={user?.daily3HourCount >= 5 ? "Daily Limits Reached (5/5)" : timer === 'Ready' ? "Check-in Ready! 🎉" : `Next check-in in: ${timer}`}
             reward={config?.threeHourReward || 15} 
             completed={timer !== 'Ready' || (user?.daily3HourCount >= 5)}
             onPress={() => handleClaimReward('3hour')}
@@ -316,32 +507,63 @@ export default function MissionsScreen() {
             isTimer
           />
 
-          {/* Social Missions */}
-          <View style={styles.sectionHeader}>
-             <Text style={styles.sectionTitle}>Social Boosters (Dynamic)</Text>
-          </View>
-          
-          {[
-            { id: 'YouTube', label: 'Subscribe YouTube', icon: 'youtube' },
-            { id: 'Facebook', label: 'Like Facebook', icon: 'facebook' },
-            { id: 'Instagram', label: 'Follow Instagram', icon: 'instagram' },
-            { id: 'X', label: 'Follow on X', icon: 'twitter' },
-            { id: 'WhatsApp', label: 'Join WhatsApp', icon: 'whatsapp' },
-            { id: 'Telegram', label: 'Join Telegram', icon: 'paper-plane' }
-          ].map(social => (
-            <SocialItem 
-               key={social.id}
-               platform={social.id}
-               label={social.label}
-               reward={config?.socialRewards?.[social.id] || 50}
-               icon={social.icon}
-               claimed={(user?.claimedSocials || []).includes(social.id)}
-               onPress={() => handleClaimReward('social', { platform: social.id })}
-            />
-          ))}
+         </ScrollView>
 
-        </ScrollView>
+        {/* 🪙 Golden Flying Coins Overlay Wrapper */}
+        <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 99999, elevation: 99999 }} pointerEvents="none">
+          {coinsToAnimate.map(coin => {
+            const targetY = Platform.OS === 'ios' ? 50 : 60;
+            const spinRotation = coin.anim.y.interpolate({
+              inputRange: [targetY, Math.max(targetY + 1, coin.startY)],
+              outputRange: ['720deg', '0deg'],
+              extrapolate: 'clamp'
+            });
+            return (
+              <Animated.View
+                key={coin.id}
+                style={{
+                  position: 'absolute',
+                  zIndex: 99999,
+                  transform: [
+                    { translateX: coin.anim.x },
+                    { translateY: coin.anim.y },
+                    { scale: coin.scale },
+                    { rotate: spinRotation }
+                  ],
+                  opacity: coin.opacity
+                }}
+                pointerEvents="none"
+              >
+                <View style={styles.goldCoin}>
+                   <FontAwesome5 name="coins" size={14} color="#FFD700" />
+                </View>
+              </Animated.View>
+            );
+          })}
+        </View>
       </SafeAreaView>
+
+      {/* 🎥 Full-screen Gamified Ad Player Overlay */}
+      {adPlaying && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="auto">
+          <LinearGradient
+            colors={['rgba(0,0,0,0.95)', 'rgba(27,94,32,0.98)']}
+            style={styles.adFullscreenContainer}
+          >
+            <View style={styles.adBox}>
+              <MaterialCommunityIcons name="play-circle" size={80} color="#FFD700" style={styles.adIconAnim} />
+              <Text style={styles.adTitle}>SPONSOR VIDEO AD</Text>
+              <Text style={styles.adSub}>Reward unlocked in: <Text style={styles.adTimerText}>{adCountdown}s</Text></Text>
+              
+              <View style={styles.adProgressBarContainer}>
+                <View style={[styles.adProgressBarFill, { width: `${(adCountdown / 5) * 100}%` }]} />
+              </View>
+
+              <Text style={styles.adFooter}>Please do not close the ad to claim your Spin!</Text>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
     </View>
   );
 }
@@ -448,5 +670,76 @@ const styles = StyleSheet.create({
   socialLabel: { flex: 1, fontSize: 14, color: '#333', fontWeight: '600' },
   claimBtn: { backgroundColor: '#1B5E20', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, shadowColor: '#1B5E20', shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 },
   claimedBtn: { backgroundColor: '#e0e0e0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
-  claimBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' }
+  claimBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  goldCoin: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F57F17',
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 8
+  },
+  adFullscreenContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999999,
+    elevation: 999999,
+  },
+  adBox: {
+    width: '85%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 30,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  adIconAnim: {
+    marginBottom: 20,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowRadius: 15,
+  },
+  adTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  adSub: {
+    color: '#a5d6a7',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 25,
+  },
+  adTimerText: {
+    color: '#FFD700',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  adProgressBarContainer: {
+    width: '100%',
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 30,
+  },
+  adProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#FFD700',
+  },
+  adFooter: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  }
 });

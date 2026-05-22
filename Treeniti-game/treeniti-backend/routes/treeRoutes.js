@@ -14,8 +14,8 @@ router.post('/harvest', authMiddleware, treeController.harvestFruits);
 
 const { uploadCloud, uploadProof } = require('../config/cloudinary');
 
-// Real plantation photo uploads (max 3 images, goes to treeniti_proofs folder)
-router.post('/real-plantation', authMiddleware, uploadProof.array('photos', 3), treeController.uploadPlantationProof);
+// Real plantation photo uploads (max 4 images, goes to treeniti_proofs folder)
+router.post('/real-plantation', authMiddleware, uploadProof.array('photos', 4), treeController.uploadPlantationProof);
 router.get('/real-plantation/status', authMiddleware, treeController.getPlantationProofs);
 
 // Game Minigame: Shake Tree

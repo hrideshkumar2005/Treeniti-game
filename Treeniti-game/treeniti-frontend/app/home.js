@@ -11,6 +11,7 @@ import {
   Pressable,
   Alert,
   FlatList,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -20,16 +21,17 @@ import { useRouter, usePathname } from 'expo-router';
 import BASE_URL from '../config/api';
 import { useConfig } from '../context/ConfigContext';
 import { useLanguage } from '../context/LanguageContext';
+import { ActivityIndicator } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
 const gridData = [
-  { id: 1, title: 'virtualTree', sub: 'virtualTreeSub', btn: 'plantNow', img: require('../assets/pic.png'), route: '/plant', color: '#2D8B2E', icon: '🌳' },
-  { id: 2, title: 'dailyTasks', sub: 'dailyTasksSub', btn: 'checkIn', img: require('../assets/pic2.png'), route: '/missions', color: '#E67E22', icon: '📋' },
-  { id: 3, title: 'weeklyLoot', sub: 'weeklyLootSub', btn: 'claimCoins', img: require('../assets/pic3.png'), route: '/weekly_loot', color: '#2D8B2E', icon: '🎁' },
-  { id: 4, title: 'treeCert', sub: 'treeCertSub', btn: 'downloadNow', img: require('../assets/pic4.png'), route: '/certificate', color: '#2D8B2E', icon: '📜' },
-  { id: 5, title: 'realPlant', sub: 'realPlantSub', btn: 'uploadProof', img: require('../assets/pic5.png'), route: '/upload_tree', color: '#E67E22', icon: '📸' },
-  { id: 6, title: 'followUs', sub: 'followUsSub', btn: 'followNow', img: require('../assets/pic6.png'), route: '/follow', color: '#2D8B2E', icon: '👥' },
+  { id: 1, title: 'virtualTree', sub: 'virtualTreeSub', btn: 'plantNow', img: require('../assets/pic.png'), route: '/plant', color: '#2D8B2E', btnColors: ['#4CAF50', '#2E7D32'], imageScale: 1.4 },
+  { id: 2, title: 'dailyTasks', sub: 'dailyTasksSub', btn: 'checkIn', img: require('../assets/pic2.png'), route: '/missions', color: '#E67E22', btnColors: ['#E67E22', '#D35400'], imageScale: 1.5 },
+  { id: 3, title: 'weeklyLoot', sub: 'weeklyLootSub', btn: 'claimCoins', img: require('../assets/pic3.png'), route: '/weekly_loot', color: '#2D8B2E', btnColors: ['#4CAF50', '#2E7D32'], imageScale: 1.5 },
+  { id: 4, title: 'treeCert', sub: 'treeCertSub', btn: 'downloadNow', img: require('../assets/pic4.png'), route: '/certificate', color: '#2D8B2E', btnColors: ['#4CAF50', '#2E7D32'], imageScale: 1.6 },
+  { id: 5, title: 'realPlant', sub: 'viewRealPlant', btn: 'viewTree', img: require('../assets/pic5.png'), route: '/upload_tree', color: '#E67E22', btnColors: ['#E67E22', '#D35400'], imageScale: 1.6 },
+  { id: 6, title: 'followUs', sub: 'followUsSub', btn: 'followNow', img: require('../assets/pic6.png'), route: '/follow', color: '#2D8B2E', btnColors: ['#4CAF50', '#2E7D32'], imageScale: 1.4 },
 ];
 
 export default function Home() {
@@ -43,8 +45,14 @@ export default function Home() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [activities, setActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [activeMetric, setActiveMetric] = useState('coins');
+  const [currentUserRank, setCurrentUserRank] = useState(null);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const sliderRef = useRef(null);
+  const activityScrollRef = useRef(null);
+  const activityIndexRef = useRef(0);
 
   const sliderImages = [
     require('../assets/slider1.jpg'),
@@ -63,10 +71,26 @@ export default function Home() {
 
     fetchUserDashboard();
     fetchActivities();
+    fetchLeaderboardPreview();
     // Refresh activity feed every 30 seconds for real-time feel
     const activityTimer = setInterval(fetchActivities, 30000);
     return () => { clearInterval(timer); clearInterval(activityTimer); };
   }, []);
+
+  useEffect(() => {
+    if (activities.length === 0) return;
+
+    activityIndexRef.current = 0;
+    const timer = setInterval(() => {
+      activityIndexRef.current = (activityIndexRef.current + 1) % activities.length;
+      activityScrollRef.current?.scrollToIndex({
+        index: activityIndexRef.current,
+        animated: true,
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activities]);
 
   const fetchUserDashboard = async () => {
     try {
@@ -111,6 +135,36 @@ export default function Home() {
     }
   };
 
+  const fetchLeaderboardPreview = async (metric = 'coins') => {
+    setLeaderboardLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${BASE_URL}/leaderboard?metric=${metric}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setLeaderboardData(data.leaders || []);
+        setCurrentUserRank({ rank: data.myRank, score: data.myScore });
+      }
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  };
+
+  const handleMetricChange = (metric) => {
+    setActiveMetric(metric);
+    fetchLeaderboardPreview(metric);
+  };
+
+  const getMetricLabel = () => {
+    if (activeMetric === 'trees') return 'Trees';
+    if (activeMetric === 'proofs') return 'Verified Proofs';
+    return 'Coins';
+  };
+
   const handleLangChange = async (lang) => {
     changeLanguage(lang);
   };
@@ -138,15 +192,11 @@ export default function Home() {
                 <SideItem icon="people-outline" label={t.team || 'My Team (Downline)'} onPress={() => { setSidebarVisible(false); router.push('/referral_team'); }} />
                 <SideItem icon="newspaper-outline" label={t.notice || 'सूचना बोर्ड (Notice Board)'} onPress={() => { setSidebarVisible(false); router.push('/notice'); }} />
                 <SideItem icon="wallet-outline" label={t.wallet || 'My Income (Wallet)'} onPress={() => { setSidebarVisible(false); router.push('/wallet'); }} />
-                <SideItem icon="trophy-outline" label={t.leaderboard || 'Rank Board (Leaderboard)'} onPress={() => { setSidebarVisible(false); router.push('/leaderboard'); }} />
-                <SideItem icon="flash-outline" label={t.missions || 'Daily Missions'} onPress={() => { setSidebarVisible(false); router.push('/missions'); }} />
-                <SideItem icon="ribbon-outline" label={t.treeCert || 'Tree Certificate'} onPress={() => { setSidebarVisible(false); router.push('/certificate'); }} />
-                <SideItem icon="camera-outline" label={t.realPlant || 'Real Plantation Upload'} onPress={() => { setSidebarVisible(false); router.push('/upload_tree'); }} />
 
                 <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10, marginHorizontal: 15 }} />
 
                 <SideItem icon="chatbubble-ellipses-outline" label={t.feedback || 'Feedback & Complaints'} onPress={() => { setSidebarVisible(false); router.push('/feedback'); }} />
-                <SideItem icon="help-buoy-outline" label={t.help || 'Help Us'} onPress={() => { setSidebarVisible(false); router.push('/help'); }} />
+                <SideItem icon="mail-outline" label={t.help || 'Help Us'} onPress={() => { setSidebarVisible(false); router.push('/help'); }} />
                 <SideItem icon="information-circle-outline" label={t.about || 'About Us'} onPress={() => { setSidebarVisible(false); router.push('/about_team'); }} />
 
                 <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 5, marginHorizontal: 15 }} />
@@ -183,7 +233,7 @@ export default function Home() {
                 </TouchableOpacity>
               </ScrollView>
               <View style={styles.sideFooter}>
-                <Text style={styles.versionText}>VERSION 2.5.0</Text>
+                <Text style={styles.versionText}>VERSION 1.0.0</Text>
               </View>
             </View>
           </Pressable>
@@ -213,6 +263,9 @@ export default function Home() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 5, paddingBottom: 5 }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1B5E20' }}>Welcome, {userData.name} 👋</Text>
+          </View>
           {/* Swipeable Hero Slider with Dots */}
           <View style={{ height: 180, marginTop: 10 }}>
             <FlatList
@@ -231,11 +284,14 @@ export default function Home() {
                 offset: width * index,
                 index,
               })}
+              initialNumToRender={1}
+              maxToRenderPerBatch={1}
+              windowSize={2}
+              removeClippedSubviews={Platform.OS === 'android'}
               renderItem={({ item }) => (
                 <View style={{ width: width, alignItems: 'center' }}>
                   <View style={[styles.heroCard, { marginTop: 0 }]}>
                     <Image source={item} style={styles.heroImg} resizeMode="cover" />
-                    <View style={styles.heroOverlay}><Text style={styles.welcomeText}>Hi, {userData.name}</Text></View>
                   </View>
                 </View>
               )}
@@ -261,26 +317,32 @@ export default function Home() {
                 onPress={() => router.push(item.route)}
               >
                 {item.img ? (
-                  <>
-                    <Image source={item.img} style={styles.fullCardImg} resizeMode="contain" />
-                    <View style={styles.cardOverlay}>
-                      <View style={styles.cardTop}>
-                        <Text style={styles.cardTitle} numberOfLines={2}>{t[item.title] || item.title}</Text>
-                      </View>
-
-                      <View style={styles.cardBottom}>
-                        <TouchableOpacity
-                          activeOpacity={0.8}
-                          style={styles.cardBtn3D}
-                          onPress={() => router.push(item.route)}
-                        >
-                          <LinearGradient colors={['#4CAF50', '#2E7D32']} style={styles.cardBtn3DInner}>
-                            <Text style={styles.cardBtnText3D}>{t[item.btn] || item.btn}</Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      </View>
+                  <View style={styles.cardInner}>
+                    <View style={styles.cardTop}>
+                      <Text style={[styles.cardTitle, { color: item.color || '#1B5E20' }]} numberOfLines={2}>{t[item.title] || item.title}</Text>
+                      {item.sub ? (
+                        <Text style={styles.cardSubTitle} numberOfLines={2}>{t[item.sub] || item.sub}</Text>
+                      ) : null}
                     </View>
-                  </>
+
+                    <Image
+                      source={item.img}
+                      style={[styles.cardImage, item.imageScale ? { transform: [{ scale: item.imageScale }] } : null]}
+                      resizeMode="contain"
+                    />
+
+                    <View style={styles.cardBottom}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        style={styles.cardBtn3D}
+                        onPress={() => router.push(item.route)}
+                      >
+                        <LinearGradient colors={item.btnColors || ['#4CAF50', '#2E7D32']} style={styles.cardBtn3DInner}>
+                          <Text style={styles.cardBtnText3D}>{t[item.btn] || item.btn}</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 ) : (
                   <View style={styles.iconItemInner}>
                     <Text style={styles.iconItemEmoji}>{item.icon}</Text>
@@ -300,10 +362,10 @@ export default function Home() {
               <Ionicons name="information-circle-outline" size={14} color="#999" />
             </View>
             <TouchableOpacity activeOpacity={0.9} style={styles.adCard}>
-              <LinearGradient 
-                colors={['#E8F5E9', '#F1F8E1']} 
-                start={{ x: 0, y: 0 }} 
-                end={{ x: 1, y: 1 }} 
+              <LinearGradient
+                colors={['#E8F5E9', '#F1F8E1']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.adGradient}
               >
                 <View style={styles.adContent}>
@@ -342,19 +404,123 @@ export default function Home() {
                 <Text style={styles.loadingText}>🌱 No activity yet. Be the first!</Text>
               </View>
             ) : (
-              activities.slice(0, 6).map((item, index) => (
-                <NoticeItem key={item._id ? `${item._id}-${index}` : `notice-${index}`} item={item} />
-              ))
+              <FlatList
+                ref={activityScrollRef}
+                data={activities}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, index) => item._id ? `${item._id}-${index}` : `notice-${index}`}
+                getItemLayout={(_, index) => ({
+                  length: width - 66,
+                  offset: (width - 66) * index,
+                  index,
+                })}
+                initialNumToRender={2}
+                maxToRenderPerBatch={2}
+                windowSize={3}
+                removeClippedSubviews={Platform.OS === 'android'}
+                renderItem={({ item }) => (
+                  <NoticeItem item={item} isHorizontal />
+                )}
+              />
             )}
           </View>
 
-          {/* Founder Section */}
-          <View style={styles.founderCard}>
-            <Image source={require('../assets/user.png')} style={styles.founderImg} />
-            <View style={styles.founderBadge}><Text style={styles.badgeText}>FOUNDER</Text></View>
-            <Text style={styles.founderName}>Alok Chaudhary</Text>
-            <Text style={styles.founderTitle}>Treeniti  Founder</Text>
+          {/* 🏆 Full Rank Board */}
+          <View style={styles.noticeBoardCard}>
+            {/* Header + Metric Tabs */}
+            <View style={styles.noticeBoardHeader}>
+              <Text style={styles.noticeBoardTitle}>🏆 Rank Board</Text>
+            </View>
+
+            {/* Metric Tabs */}
+            <View style={styles.lbTabRow}>
+              {[{ id: 'coins', icon: 'coins', label: 'Coins' }, { id: 'trees', icon: 'tree', label: 'Trees' }, { id: 'proofs', icon: 'camera', label: 'Proofs' }].map(tab => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.lbTab, activeMetric === tab.id && styles.lbTabActive]}
+                  onPress={() => handleMetricChange(tab.id)}
+                >
+                  <FontAwesome5 name={tab.icon} size={12} color={activeMetric === tab.id ? '#fff' : '#1B5E20'} />
+                  <Text style={[styles.lbTabText, activeMetric === tab.id && styles.lbTabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {leaderboardLoading ? (
+              <ActivityIndicator size="large" color="#1B5E20" style={{ marginVertical: 20 }} />
+            ) : leaderboardData.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: '#999', marginVertical: 20 }}>🌱 No data yet. Play to claim top rank!</Text>
+            ) : (
+              <>
+                {/* Podium Top 3 */}
+                {(() => {
+                  const top3 = leaderboardData.slice(0, 3);
+                  return (
+                    <View style={styles.lbPodium}>
+                      {/* 2nd */}
+                      {top3[1] && (
+                        <View style={styles.lbPodiumPos}>
+                          <Image source={require('../assets/user.png')} style={[styles.lbPodiumImg, { borderColor: '#C0C0C0' }]} />
+                          <View style={[styles.lbRankBadge, { backgroundColor: '#C0C0C0' }]}><Text style={styles.lbRankText}>2</Text></View>
+                          <Text style={styles.lbPodiumName} numberOfLines={1}>{top3[1].name}</Text>
+                          <Text style={styles.lbPodiumScore}>{top3[1].score}</Text>
+                        </View>
+                      )}
+                      {/* 1st */}
+                      {top3[0] && (
+                        <View style={[styles.lbPodiumPos, { marginTop: -30 }]}>
+                          <FontAwesome5 name="crown" size={22} color="#FFD700" style={{ marginBottom: 4 }} />
+                          <Image source={require('../assets/user.png')} style={[styles.lbPodiumImg, { width: 80, height: 80, borderRadius: 40, borderColor: '#FFD700', borderWidth: 4 }]} />
+                          <View style={[styles.lbRankBadge, { backgroundColor: '#FFD700', width: 28, height: 28, borderRadius: 14, marginTop: -14 }]}><Text style={[styles.lbRankText, { fontSize: 13 }]}>1</Text></View>
+                          <Text style={[styles.lbPodiumName, { fontSize: 15, fontWeight: '900' }]} numberOfLines={1}>{top3[0].name}</Text>
+                          <Text style={[styles.lbPodiumScore, { color: '#FFD700', fontSize: 15 }]}>{top3[0].score}</Text>
+                        </View>
+                      )}
+                      {/* 3rd */}
+                      {top3[2] && (
+                        <View style={styles.lbPodiumPos}>
+                          <Image source={require('../assets/user.png')} style={[styles.lbPodiumImg, { borderColor: '#CD7F32' }]} />
+                          <View style={[styles.lbRankBadge, { backgroundColor: '#CD7F32' }]}><Text style={styles.lbRankText}>3</Text></View>
+                          <Text style={styles.lbPodiumName} numberOfLines={1}>{top3[2].name}</Text>
+                          <Text style={styles.lbPodiumScore}>{top3[2].score}</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                {/* Rest of list */}
+                {leaderboardData.slice(3, 8).map((user, index) => (
+                  <View key={user._id || index} style={styles.lbListItem}>
+                    <Text style={styles.lbListRank}>{index + 4}</Text>
+                    <Image source={require('../assets/user.png')} style={styles.lbListImg} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.lbListName}>{user.name}</Text>
+                      <Text style={styles.lbListSub}>Total {getMetricLabel()}</Text>
+                    </View>
+                    <View style={styles.lbScoreBox}>
+                      <Text style={styles.lbScoreText}>{user.score}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                {/* My Rank */}
+                <View style={styles.lbMyRankBar}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.lbMyRankCircle}>
+                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>#{currentUserRank?.rank || '?'}</Text>
+                    </View>
+                    <Text style={styles.lbMyRankText}>Your Rank</Text>
+                  </View>
+                  <Text style={styles.lbMyCoinsText}>{currentUserRank?.score || 0} {getMetricLabel()}</Text>
+                </View>
+              </>
+            )}
           </View>
+
+
         </ScrollView>
 
         {/* --- 🟢 Optimized Docked Navbar --- */}
@@ -362,15 +528,20 @@ export default function Home() {
           <TabItem icon="home" label="Home" active={pathname === '/home'} onPress={() => router.push('/home')} />
           <TabItem icon="water-outline" label="Add Water" onPress={() => router.push('/plant')} />
 
-          <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
-            <View style={styles.centerBtnInner}>
-              <Ionicons name="add" size={28} color="#fff" />
-              <Text style={styles.centerText}>PHOTO{"\n"}UPLOAD</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.centerCol}>
+            <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
+              <LinearGradient
+                colors={['#4CAF50', '#1B5E20']}
+                style={styles.centerBtnInner}
+              >
+                <Ionicons name="camera" size={22} color="#fff" style={{ marginBottom: 1 }} />
+                <Text style={styles.centerText}>UPLOAD</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
 
           <TabItem icon="leaf-outline" label="Add Fertilizer" onPress={() => router.push('/plant')} />
-          <TabItem icon="cash-outline" label="Earn Money" onPress={() => router.push('/earn')} />
+          <TabItem icon="gift-outline" label="Earn More" onPress={() => router.push('/earn')} />
         </View>
       </View>
     </SafeAreaView>
@@ -392,7 +563,7 @@ const TabItem = ({ icon, label, active, onPress }) => (
     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
   >
     <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
-      <Ionicons name={icon} size={20} color={active ? "#1B5E20" : "#fff"} />
+      <Ionicons name={icon} size={24} color={active ? "#124916ff" : "#fff"} />
     </View>
     <Text style={styles.tabLabel}>{label}</Text>
   </TouchableOpacity>
@@ -415,17 +586,17 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
-const NoticeItem = ({ item }) => {
+const NoticeItem = React.memo(({ item, isHorizontal }) => {
   const cfg = TYPE_CONFIG[item.type] || TYPE_CONFIG.DEFAULT;
   const initials = item.userName ? item.userName.substring(0, 2).toUpperCase() : '?';
   return (
-    <View style={[styles.noticeItem, { backgroundColor: cfg.bg }]}>
+    <View style={[styles.noticeItem, { backgroundColor: cfg.bg }, isHorizontal && styles.noticeItemHorizontal]}>
       <View style={[styles.noticeDot, { backgroundColor: cfg.dot }]} />
       <View style={[styles.avatarMini, { backgroundColor: cfg.dot }]}>
         <Text style={styles.avatarText}>{item.icon || cfg.emoji}</Text>
       </View>
       <View style={{ flex: 1, marginLeft: 10 }}>
-        <Text style={styles.noticeText}>
+        <Text style={styles.noticeText} numberOfLines={2}>
           <Text style={styles.noticeName}>{item.userName}</Text>
           {'  '}{item.text}
         </Text>
@@ -433,7 +604,7 @@ const NoticeItem = ({ item }) => {
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F4F8F4' },
@@ -447,32 +618,27 @@ const styles = StyleSheet.create({
   profileImg: { width: 35, height: 35, borderRadius: 17.5 },
   heroCard: { width: width - 30, height: 155, alignSelf: 'center', borderRadius: 25, overflow: 'hidden', marginTop: 10 },
   heroImg: { width: '100%', height: '100%' },
-  heroOverlay: { position: 'absolute', top: 15, left: 15, backgroundColor: 'rgba(27, 94, 32, 0.6)', padding: 10, borderRadius: 15 },
-  welcomeText: { color: '#fff', fontWeight: 'bold' },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingHorizontal: 12, marginTop: 15, gap: 8 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: 12, marginTop: 15, gap: 8 },
   gridItem: {
     width: (width - 48) / 3,
-    height: 165,
-    backgroundColor: '#fff',
+    height: 175,
+    backgroundColor: '#FCFAF6',
     borderRadius: 22,
     padding: 0,
     alignItems: 'center',
     marginBottom: 8,
-    elevation: 10,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 2, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
     borderWidth: 1,
     borderColor: '#F0F0F0',
-    borderBottomWidth: 6,
-    borderRightWidth: 2,
-    borderBottomColor: '#D1D1D1',
-    borderRightColor: '#D1D1D1',
     overflow: 'hidden'
   },
   highlightCard: { borderNone: true },
-  fullCardImg: { width: '100%', height: '70%', marginTop: 22 },
+  cardInner: { width: '100%', height: '100%', paddingTop: 10, paddingBottom: 10, justifyContent: 'space-between', alignItems: 'center' },
+  cardImage: { flex: 1, width: '100%', marginVertical: 2 },
   iconItemInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 15 },
   iconItemEmoji: { fontSize: 40, marginBottom: 10 },
   iconItemTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
@@ -507,7 +673,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: '#6DBE71',
+    backgroundColor: '#1B5E20',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -518,13 +684,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10
   },
-  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  tabIconCircle: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+  tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   activeTabIcon: { backgroundColor: '#fff' },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 1, fontWeight: '700', textAlign: 'center' },
-  centerBtn: { marginTop: -20, alignItems: 'center' },
-  centerBtnInner: { width: 54, height: 54, backgroundColor: '#1B3C1B', borderRadius: 27, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#F4F8F4' },
-  centerText: { fontSize: 6.5, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -1 },
+  tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+  centerBtn: { marginTop: -22, alignItems: 'center' },
+  centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // 🔴 LIVE Notice Board Styles
   noticeBoardCard: { marginHorizontal: 15, backgroundColor: '#fff', borderRadius: 25, padding: 18, marginBottom: 15, elevation: 5, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, borderWidth: 1, borderColor: '#E8F5E9' },
   noticeBoardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
@@ -536,6 +703,10 @@ const styles = StyleSheet.create({
   loadingRow: { paddingVertical: 20, alignItems: 'center' },
   loadingText: { color: '#999', fontSize: 13 },
   noticeItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 15, marginBottom: 8, position: 'relative' },
+  noticeItemHorizontal: {
+    width: width - 66,
+    marginBottom: 0,
+  },
   noticeDot: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, borderRadius: 2 },
   avatarMini: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 16 },
@@ -547,27 +718,28 @@ const styles = StyleSheet.create({
   cardGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  cardOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
   cardTop: {
     alignItems: 'center',
     width: '100%',
-    paddingTop: 4,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
   },
   cardTitle: {
-    color: '#1B5E20', // Matching nature green theme
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900',
     textAlign: 'center',
     textShadowColor: 'rgba(255,255,255,0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.2,
+    letterSpacing: 0,
+    lineHeight: 14,
+  },
+  cardSubTitle: {
+    color: '#444',
+    fontSize: 9,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 11,
   },
   cardBottom: {
     alignItems: 'center',
@@ -589,10 +761,9 @@ const styles = StyleSheet.create({
   },
   cardBtnText3D: {
     color: '#fff',
-    fontSize: 8,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 0.2,
   },
   // Pagination Dots
   paginationDots: {
@@ -684,4 +855,91 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 16,
   },
+  viewAllBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(27, 94, 32, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 2,
+  },
+  viewAllText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+  },
+  rankBoardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F0F0F0',
+  },
+  rankBadgeCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#999',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  rankBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  rankBoardImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
+    backgroundColor: '#eee',
+  },
+  rankBoardName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#333',
+  },
+  rankScoreBox: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  rankScoreText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+  },
+
+  // 🏆 Full Embedded Leaderboard Styles
+  lbTabRow: { flexDirection: 'row', backgroundColor: '#E8F5E9', borderRadius: 15, padding: 4, marginBottom: 15, gap: 4 },
+  lbTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 12, gap: 6 },
+  lbTabActive: { backgroundColor: '#1B5E20' },
+  lbTabText: { fontSize: 11, fontWeight: 'bold', color: '#1B5E20' },
+  lbTabTextActive: { color: '#fff' },
+
+  lbPodium: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', paddingVertical: 15, gap: 5 },
+  lbPodiumPos: { alignItems: 'center', width: '30%' },
+  lbPodiumImg: { width: 60, height: 60, borderRadius: 30, borderWidth: 3, backgroundColor: '#f0f0f0' },
+  lbRankBadge: { width: 20, height: 20, borderRadius: 10, marginTop: -10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  lbRankText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
+  lbPodiumName: { color: '#333', marginTop: 8, fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
+  lbPodiumScore: { color: '#1B5E20', fontSize: 12, fontWeight: 'bold', marginTop: 2 },
+
+  lbListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  lbListRank: { width: 30, fontSize: 14, fontWeight: 'bold', color: '#999' },
+  lbListImg: { width: 38, height: 38, borderRadius: 19, marginRight: 12, backgroundColor: '#eee' },
+  lbListName: { fontSize: 14, fontWeight: '700', color: '#333' },
+  lbListSub: { fontSize: 10, color: '#999', marginTop: 1 },
+  lbScoreBox: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 },
+  lbScoreText: { fontSize: 12, fontWeight: 'bold', color: '#1B5E20' },
+
+  lbMyRankBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1B3C1B', borderRadius: 18, padding: 15, marginTop: 18 },
+  lbMyRankCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  lbMyRankText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  lbMyCoinsText: { color: '#FFD700', fontWeight: 'bold', fontSize: 15 },
 });

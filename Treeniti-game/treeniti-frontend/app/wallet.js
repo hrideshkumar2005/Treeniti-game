@@ -6,6 +6,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
+import { Audio } from 'expo-av';
 
 import { useConfig } from '../context/ConfigContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -20,6 +21,20 @@ export default function WalletScreen() {
   const [upiId, setUpiId] = useState('');
   const [accountName, setAccountName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const playConvertSound = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/coin_collect.mp3'),
+        { shouldPlay: true }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (e) {
+      console.log('Sound error:', e);
+    }
+  };
 
   const [balance, setBalance] = useState({ coins: 0, rupees: 0, referralAmount: 0, pendingRewards: 0 });
   const [transactions, setTransactions] = useState([]);
@@ -90,6 +105,7 @@ export default function WalletScreen() {
         });
         const data = await res.json();
         if(data.success) {
+            playConvertSound();
             Alert.alert("Conversion Successful!", data.message);
             fetchWalletConfig();
         } else {
@@ -165,7 +181,7 @@ export default function WalletScreen() {
         </View>
 
         <View style={styles.withdrawCard}>
-           <Text style={styles.inputLabel}>{t.fullName}</Text>
+           <Text style={styles.inputLabel}>Account Holder Name</Text>
            <View style={[styles.inputContainer, {marginBottom: 15}]}>
               <TextInput 
                 style={styles.input} 
