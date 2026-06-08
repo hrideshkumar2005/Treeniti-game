@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Dimensions, Share } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Dimensions, Share, Clipboard, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BannerAd, BannerAdSize, AD_UNITS } from '../config/ads';
 import BASE_URL from '../config/api';
 
 const { width } = Dimensions.get('window');
@@ -51,10 +53,19 @@ export default function ReferralTeam() {
 
   useFocusEffect(useCallback(()=>{ fetchTeamStats(); }, []));
 
+  const copyToClipboard = () => {
+    if (profile.referralCode) {
+      Clipboard.setString(profile.referralCode);
+      Alert.alert("Copied", "Your invitation code has been copied to clipboard!");
+    } else {
+      Alert.alert("Error", "Referral code not loaded yet.");
+    }
+  };
+
   const onShare = async () => {
     try {
       await Share.share({
-        message: `Join my Treeniti team! Grow trees & earn cash: https://treeniti.app/refer/${profile.referralCode || 'NETWORK'}`,
+        message: `Join my ecosystem team on Treeniti! Grow virtual trees, complete daily tasks, and earn real rewards. 🌳💰\n\n1️⃣ Download the Treeniti app: https://play.google.com/store/apps/details?id=com.treeniti.app2&hl=en_US\n2️⃣ Use my Invitation Code during registration: ${profile.referralCode || 'NETWORK'}\n\nLet's grow together and build a greener future! 🌍✨`,
       });
     } catch (error) { console.log(error.message); }
   };
@@ -66,7 +77,7 @@ export default function ReferralTeam() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#1B5E20" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Team & Referrals</Text>
+        <Text style={styles.headerTitle}>Refer & Earn</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -92,6 +103,22 @@ export default function ReferralTeam() {
           <TouchableOpacity style={[styles.mainActionBtn, {marginTop: 12}]}>
             <Text style={styles.mainActionBtnText}>Withdraw Referral Money</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* --- 🔑 Invitation Code Card --- */}
+        <View style={styles.inviteCodeCard}>
+          <View style={styles.inviteCodeHeader}>
+            <Ionicons name="gift-outline" size={20} color="#1B5E20" />
+            <Text style={styles.inviteCodeTitle}>Your Invitation Code</Text>
+          </View>
+          <View style={styles.inviteCodeRow}>
+            <Text style={styles.inviteCodeText}>{profile.referralCode || 'TRNXXXXXX'}</Text>
+            <TouchableOpacity style={styles.copyBtn} onPress={copyToClipboard}>
+              <Ionicons name="copy-outline" size={18} color="#fff" />
+              <Text style={styles.copyBtnText}>Copy</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.inviteCodeSub}>Share this code with friends so they can join your ecosystem team!</Text>
         </View>
 
         {/* --- ⚪ Milestones Section --- */}
@@ -178,20 +205,34 @@ export default function ReferralTeam() {
         </View>
       </ScrollView>
 
+      {/* --- Google Banner Ad --- */}
+      <View style={styles.bannerContainer}>
+        <BannerAd
+          unitId={AD_UNITS.BANNER}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        />
+      </View>
+
       {/* --- 🟢 Optimized Docked Navbar --- */}
       <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
         <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
-        <TabItem icon="water-outline" label="Water" onPress={() => router.push('/plant')} />
+        <TabItem icon="water-outline" label="Add Water" onPress={() => router.push('/plant')} />
 
-        <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
-          <View style={styles.centerBtnInner}>
-            <Ionicons name="camera" size={26} color="#fff" />
-            <Text style={styles.centerText}>UPLOAD</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.centerCol}>
+          <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
+            <LinearGradient
+              colors={['#4CAF50', '#1B5E20']}
+              style={styles.centerBtnInner}
+            >
+              <Ionicons name="camera" size={22} color="#fff" style={{ marginBottom: 1 }} />
+              <Text style={styles.centerText}>UPLOAD</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
-        <TabItem icon="leaf-outline" label="Fertilize" onPress={() => router.push('/plant')} />
-        <TabItem icon="people" label="Team" active={true} onPress={() => {}} />
+        <TabItem icon="leaf-outline" label="Add Fertilizer" onPress={() => router.push('/plant')} />
+        <TabItem icon="people" label="Refer" active={true} onPress={() => {}} />
       </View>
     </SafeAreaView>
   );
@@ -213,8 +254,8 @@ const TabItem = ({ icon, label, active, onPress }) => (
     activeOpacity={0.7}
     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
   >
-    <View style={[styles.tabIconCircle, active && { backgroundColor: '#fff' }]}>
-      <Ionicons name={icon} size={20} color={active ? "#1B5E20" : "#fff"} />
+    <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
+      <Ionicons name={icon} size={24} color={active ? "#124916ff" : "#fff"} />
     </View>
     <Text style={styles.tabLabel}>{label}</Text>
   </TouchableOpacity>
@@ -292,7 +333,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: '#6DBE71',
+    backgroundColor: '#1B5E20',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -303,10 +344,81 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10
   },
-  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  tabIconCircle: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 1, fontWeight: '700', textAlign: 'center' },
-  centerBtn: { marginTop: -20, alignItems: 'center' },
-  centerBtnInner: { width: 54, height: 54, backgroundColor: '#1B3C1B', borderRadius: 27, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#F4F8F4' },
-  centerText: { fontSize: 6.5, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -1 },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+  tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  activeTabIcon: { backgroundColor: '#fff' },
+  tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+  centerBtn: { marginTop: -22, alignItems: 'center' },
+  centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  // Invite Code Card styles
+  inviteCodeCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 15,
+    borderRadius: 30,
+    padding: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    marginBottom: 10,
+    marginTop: 5,
+  },
+  inviteCodeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  inviteCodeTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1B5E20',
+  },
+  inviteCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F4F8F4',
+    padding: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E0EDE0',
+  },
+  inviteCodeText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1B3C1B',
+    letterSpacing: 1.5,
+  },
+  copyBtn: {
+    backgroundColor: '#1B5E20',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 15,
+    gap: 5,
+  },
+  copyBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  inviteCodeSub: {
+    fontSize: 10.5,
+    color: '#666',
+    marginTop: 10,
+    lineHeight: 15,
+  },
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+  },
 });

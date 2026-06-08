@@ -69,3 +69,14 @@ seed*.js
 # ========================
 .vscode/settings.json
 .idea/
+
+# ========================
+# Sensitive Credentials / Local Test Files
+# ========================
+credentials.json
+**/credentials.json
+test_pass.js
+**/test_pass.js
+*.pem
+*.jks
+

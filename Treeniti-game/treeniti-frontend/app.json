@@ -2,7 +2,7 @@
   "expo": {
     "name": "Treeniti",
     "slug": "treeniti",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "icon": "./assets/treeniti_logo.png",
     "splash": {
       "image": "./assets/blank.png",
@@ -20,14 +20,11 @@
     },
     "android": {
       "package": "com.treeniti.app2",
-      "versionCode": 3,
-      "permissions": [
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO"
-      ],
       "blockedPermissions": [
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ]
     },
     "plugins": [
@@ -43,7 +40,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-9702132255395061~2646750769",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ],

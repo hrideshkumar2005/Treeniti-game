@@ -13,7 +13,11 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "credentialsSource": "local",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://treenitiofficial1.onrender.com/api"
+      }
     }
   },
   "submit": {

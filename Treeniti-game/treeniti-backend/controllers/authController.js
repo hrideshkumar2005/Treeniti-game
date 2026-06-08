@@ -108,7 +108,7 @@ exports.login = async (req, res) => {
 
         if (!user) {
             // New Registration (Fallback if using OTP and user not found)
-            const myRefCode = "TRN" + Math.floor(1000 + Math.random() * 9000);
+            const myRefCode = "TRN" + Math.floor(100000 + Math.random() * 900000);
             user = new User({ 
                 mobile, 
                 name: name || 'New User', 
@@ -217,7 +217,7 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
     try {
-        const { mobile, otp, loginPassword, fundPassword, refCode, deviceId } = req.body;
+        const { mobile, otp, loginPassword, fundPassword, refCode, deviceId, name } = req.body;
         
         if (!mobile || !otp || !loginPassword) {
             return res.status(400).json({ error: "All fields are required for registration." });
@@ -249,14 +249,14 @@ exports.register = async (req, res) => {
         const hashedFundPass = await bcrypt.hash(effectiveFundPass, salt);
 
         // Create User
-        const myRefCode = "TRN" + Math.floor(1000 + Math.random() * 9000);
+        const myRefCode = "TRN" + Math.floor(100000 + Math.random() * 900000);
         const newUser = new User({
             mobile,
             loginPassword: hashedLoginPass,
             fundPassword: hashedFundPass,
             referralCode: myRefCode,
             referredBy: refCode || null,
-            name: 'Grower ' + mobile.slice(-4)
+            name: name || ('Grower ' + mobile.slice(-4))
         });
 
         if (deviceId) newUser.deviceIds.push(deviceId);
@@ -285,6 +285,65 @@ exports.register = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 }
+
+exports.checkMobile = async (req, res) => {
+    try {
+        const { mobile } = req.query;
+        if (!mobile) return res.status(400).json({ error: "Mobile number is required." });
+        const user = await User.findOne({ mobile });
+        res.json({ success: true, exists: !!user });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { mobile, otp, newPassword } = req.body;
+        if (!mobile || !otp || !newPassword) {
+            return res.status(400).json({ error: "Mobile number, OTP, and new password are required." });
+        }
+
+        const user = await User.findOne({ mobile });
+        if (!user) {
+            return res.status(404).json({ error: "User not found with this mobile number." });
+        }
+
+        // Verify OTP
+        if (otp !== '123456') {
+            const stored = otpStore.get(mobile);
+            if (!stored || stored.expires < Date.now()) {
+                return res.status(400).json({ error: "OTP expired or not found. Use 123456 for demo." });
+            }
+            const isMatch = await bcrypt.compare(otp, stored.otp);
+            if (!isMatch) {
+                return res.status(400).json({ error: "Invalid OTP. Use 123456 for demo." });
+            }
+        }
+
+        otpStore.delete(mobile);
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        // Update password
+        user.loginPassword = hashedPassword;
+        await user.save();
+
+        // Log success
+        await new SecurityLog({
+            userId: user._id,
+            eventType: 'LOGIN_SUCCESS',
+            ip: req.ip,
+            details: `Password reset successfully via OTP for user ${user.mobile}`
+        }).save();
+
+        res.json({ success: true, message: "Password reset successful! Please login with your new password." });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
 
 exports.getProfile = async (req, res) => {
     try {

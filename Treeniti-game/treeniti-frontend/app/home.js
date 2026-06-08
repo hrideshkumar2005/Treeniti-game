@@ -18,6 +18,7 @@ import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, usePathname } from 'expo-router';
+import { BannerAd, BannerAdSize, AD_UNITS } from '../config/ads';
 import BASE_URL from '../config/api';
 import { useConfig } from '../context/ConfigContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -42,6 +43,23 @@ export default function Home() {
   const pathname = usePathname();
   const [isSidebarVisible, setSidebarVisible] = useState(false);
   const [userData, setUserData] = useState({ name: "User", coins: 0, role: "User", avatar: null });
+  const [ambientBg, setAmbientBg] = useState('#F4F8F4');
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const hour = new Date().getHours();
+      let color = '#F4F8F4';
+      if (hour >= 6 && hour < 12) color = '#FAF6EB'; // Morning: soft golden light
+      else if (hour >= 12 && hour < 17) color = '#F0F8FD'; // Afternoon: clear sky tint
+      else if (hour >= 17 && hour < 20) color = '#FAF2FC'; // Evening: sunset lilac tint
+      else color = '#ECEFF4'; // Night: moonlit grey-blue
+      setAmbientBg(color);
+    };
+
+    updateTheme();
+    const themeTimer = setInterval(updateTheme, 5 * 60 * 1000);
+    return () => clearInterval(themeTimer);
+  }, []);
   const [showTutorial, setShowTutorial] = useState(false);
   const [activities, setActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
@@ -175,8 +193,8 @@ export default function Home() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: ambientBg }]} edges={['top']}>
+      <View style={[styles.container, { backgroundColor: ambientBg }]}>
         {/* --- Sidebar Menu --- */}
         <Modal visible={isSidebarVisible} transparent animationType="fade">
           <Pressable style={styles.sidebarOverlay} onPress={() => setSidebarVisible(false)}>
@@ -240,7 +258,7 @@ export default function Home() {
         </Modal>
 
         {/* --- Header --- */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: ambientBg }]}>
           <TouchableOpacity onPress={() => setSidebarVisible(true)}>
             <Ionicons name="menu-outline" size={32} color="#1B5E20" />
           </TouchableOpacity>
@@ -250,8 +268,8 @@ export default function Home() {
               <Text style={styles.coinText}>{userData.coins}</Text>
             </View>
             <TouchableOpacity style={styles.referBadge} onPress={() => router.push('/referral_team')}>
-              <Ionicons name="git-network-outline" size={14} color="#1B5E20" />
-              <Text style={styles.referText}>{t.refer}</Text>
+              <Ionicons name="share-social-outline" size={16} color="#1B5E20" />
+              <Text style={styles.referText}>Refer</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/profile')}>
               <Image
@@ -523,9 +541,18 @@ export default function Home() {
 
         </ScrollView>
 
+        {/* --- Google Banner Ad --- */}
+        <View style={styles.bannerContainer}>
+          <BannerAd
+            unitId={AD_UNITS.BANNER}
+            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+            requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          />
+        </View>
+
         {/* --- 🟢 Optimized Docked Navbar --- */}
         <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
-          <TabItem icon="home" label="Home" active={pathname === '/home'} onPress={() => router.push('/home')} />
+          <TabItem icon="home" label="Home" active={true} onPress={() => router.push('/home')} />
           <TabItem icon="water-outline" label="Add Water" onPress={() => router.push('/plant')} />
 
           <View style={styles.centerCol}>
@@ -605,6 +632,7 @@ const NoticeItem = React.memo(({ item, isHorizontal }) => {
     </View>
   );
 });
+NoticeItem.displayName = 'NoticeItem';
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F4F8F4' },
@@ -613,8 +641,8 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center' },
   coinBadge: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 15, borderRadius: 20, marginRight: 8, elevation: 2, alignItems: 'center' },
   coinText: { fontWeight: 'bold', color: '#1B5E20' },
-  referBadge: { flexDirection: 'row', backgroundColor: '#E8F5E9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, alignItems: 'center' },
-  referText: { fontSize: 12, fontWeight: 'bold', color: '#1B5E20', marginLeft: 4 },
+  referBadge: { flexDirection: 'column', backgroundColor: '#E8F5E9', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  referText: { fontSize: 9.5, fontWeight: 'bold', color: '#1B5E20', marginTop: 1 },
   profileImg: { width: 35, height: 35, borderRadius: 17.5 },
   heroCard: { width: width - 30, height: 155, alignSelf: 'center', borderRadius: 25, overflow: 'hidden', marginTop: 10 },
   heroImg: { width: '100%', height: '100%' },
@@ -942,4 +970,11 @@ const styles = StyleSheet.create({
   lbMyRankCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   lbMyRankText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   lbMyCoinsText: { color: '#FFD700', fontWeight: 'bold', fontSize: 15 },
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+  },
 });

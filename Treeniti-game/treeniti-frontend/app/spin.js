@@ -19,6 +19,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
+import { InterstitialAd, RewardedAd, AdEventType, RewardedAdEventType, AD_UNITS } from '../config/ads';
+
+const interstitialAdInstance = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
+  requestNonPersonalizedAdsOnly: true,
+});
+
+const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
+  requestNonPersonalizedAdsOnly: true,
+});
 
 const SOUNDS = {
   spin: require('../assets/sounds/spin_sound.wav'),
@@ -44,8 +53,8 @@ export default function SpinWheelScreen() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [adPlaying, setAdPlaying] = useState(false);
-  const [adCountdown, setAdCountdown] = useState(5);
+  const [rewardedLoaded, setRewardedLoaded] = useState(false);
+  const [interstitialLoaded, setInterstitialLoaded] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const rotationState = useRef(0);
   const soundRef = useRef(null);
@@ -69,23 +78,59 @@ export default function SpinWheelScreen() {
   }, []);
 
   useEffect(() => {
-    let timer;
-    if (adPlaying && adCountdown > 0) {
-      timer = setTimeout(() => {
-        setAdCountdown(prev => prev - 1);
-      }, 1000);
-    } else if (adPlaying && adCountdown === 0) {
-      setAdPlaying(false);
-      setTimeout(() => {
+    // 1. Load Rewarded Ad listeners
+    const unsubRewardedLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
+      setRewardedLoaded(true);
+    });
+    const unsubRewardedEarned = rewardedAdInstance.addAdEventListener(
+      RewardedAdEventType.EARNED_REWARD,
+      () => {
         handleSpin(true);
-      }, 300);
-    }
-    return () => clearTimeout(timer);
-  }, [adPlaying, adCountdown]);
+      }
+    );
+    const unsubRewardedClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+      setRewardedLoaded(false);
+      rewardedAdInstance.load();
+    });
+
+    // 2. Load Interstitial Ad listeners
+    const unsubInterstitialLoaded = interstitialAdInstance.addAdEventListener(AdEventType.LOADED, () => {
+      setInterstitialLoaded(true);
+    });
+    const unsubInterstitialClosed = interstitialAdInstance.addAdEventListener(AdEventType.CLOSED, () => {
+      setInterstitialLoaded(false);
+      interstitialAdInstance.load();
+      router.back();
+    });
+
+    // Load both ads
+    rewardedAdInstance.load();
+    interstitialAdInstance.load();
+
+    return () => {
+      unsubRewardedLoaded();
+      unsubRewardedEarned();
+      unsubRewardedClosed();
+      unsubInterstitialLoaded();
+      unsubInterstitialClosed();
+    };
+  }, []);
 
   const triggerAdWatch = () => {
-    setAdPlaying(true);
-    setAdCountdown(5);
+    if (rewardedLoaded) {
+      rewardedAdInstance.show();
+    } else {
+      Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+      rewardedAdInstance.load();
+    }
+  };
+
+  const handleBackPress = () => {
+    if (interstitialLoaded) {
+      interstitialAdInstance.show();
+    } else {
+      router.back();
+    }
   };
 
   async function playSound(type) {
@@ -211,7 +256,7 @@ export default function SpinWheelScreen() {
           
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
               <Ionicons name="arrow-back" size={28} color="#fff" />
             </TouchableOpacity>
             <View style={styles.headerTitleBox}>
@@ -285,27 +330,7 @@ export default function SpinWheelScreen() {
         </SafeAreaView>
       </ImageBackground>
 
-      {/* 🎥 Full-screen Gamified Ad Player Overlay */}
-      {adPlaying && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="auto">
-          <LinearGradient
-            colors={['rgba(0,0,0,0.95)', 'rgba(27,94,32,0.98)']}
-            style={styles.adFullscreenContainer}
-          >
-            <View style={styles.adBox}>
-              <MaterialCommunityIcons name="play-circle" size={80} color="#FFD700" style={styles.adIconAnim} />
-              <Text style={styles.adTitle}>SPONSOR VIDEO AD</Text>
-              <Text style={styles.adSub}>Reward unlocked in: <Text style={styles.adTimerText}>{adCountdown}s</Text></Text>
-              
-              <View style={styles.adProgressBarContainer}>
-                <View style={[styles.adProgressBarFill, { width: `${(adCountdown / 5) * 100}%` }]} />
-              </View>
 
-              <Text style={styles.adFooter}>Please do not close the ad to claim your Spin!</Text>
-            </View>
-          </LinearGradient>
-        </View>
-      )}
     </View>
   );
 }

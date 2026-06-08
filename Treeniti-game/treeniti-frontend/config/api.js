@@ -5,6 +5,6 @@
  */
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://treenitiofficial1.onrender.com/api'; 
-// const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.6:5000/api';
+// const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.32.179.46:5000/api';
 
 export default BASE_URL;

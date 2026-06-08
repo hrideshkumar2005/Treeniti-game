@@ -42,13 +42,13 @@ const STAGE_IMAGES = {
 
 // 🌱 Sequential Growth Stages (matches the botanical cycle)
 const GROWTH_STAGES = [
-    { key: 'Seed', emoji: '🌰', label: 'Seed', labelHi: 'बीज', size: width * 0.45 },
-    { key: 'Sprout', emoji: '🌱', label: 'Sprout', labelHi: 'अंकुर', size: width * 0.58 },
-    { key: 'Plant', emoji: '🌿', label: 'Plant', labelHi: 'पौधा', size: width * 0.72 },
-    { key: 'Growing Plant', emoji: '🌿', label: 'Growing', labelHi: 'बड़ा पौधा', size: width * 0.90 },
-    { key: 'Young Tree', emoji: '🌳', label: 'Sapling', labelHi: 'पेड़', size: width * 1.15 },
-    { key: 'Mature Tree', emoji: '🌲', label: 'Tree', labelHi: 'वृक्ष', size: width * 1.00 },
-    { key: 'Mature Tree (Harvest)', emoji: '🍎', label: 'Harvest', labelHi: 'फल', size: width * 1.30 },
+    { key: 'Seed', emoji: '🌰', label: 'Seed', labelHi: 'बीज', size: width * 0.40 },
+    { key: 'Sprout', emoji: '🌱', label: 'Sprout', labelHi: 'अंकुर', size: width * 0.52 },
+    { key: 'Plant', emoji: '🌿', label: 'Plant', labelHi: 'पौधा', size: width * 0.65 },
+    { key: 'Growing Plant', emoji: '🌿', label: 'Growing', labelHi: 'बड़ा पौधा', size: width * 0.80 },
+    { key: 'Young Tree', emoji: '🌳', label: 'Sapling', labelHi: 'पेड़', size: width * 1.00 },
+    { key: 'Mature Tree', emoji: '🌲', label: 'Tree', labelHi: 'वृक्ष', size: width * 0.88 },
+    { key: 'Mature Tree (Harvest)', emoji: '🍎', label: 'Harvest', labelHi: 'फल', size: width * 1.12 },
 ];
 
 // 🎵 Local Sound Effects
@@ -249,6 +249,7 @@ export default function GameHomeScreen() {
     const params = useLocalSearchParams();
     const hasAutoStartedShake = useRef(false);
 
+    const [bgImage, setBgImage] = useState(require('../assets/image.jpg'));
     const [trees, setTrees] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [tokens, setTokens] = useState({ coins: 0, growth: 0 });
@@ -320,6 +321,37 @@ export default function GameHomeScreen() {
     const coinPlayer = useAudioPlayer(SOUNDS.coin);
     const successPlayer = useAudioPlayer(SOUNDS.success);
     const tapPlayer = useAudioPlayer(SOUNDS.tap);
+
+    const updateBackground = useCallback(() => {
+        let hour = new Date().getHours();
+        try {
+            const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false };
+            const formatter = new Intl.DateTimeFormat('en-US', options);
+            hour = parseInt(formatter.format(new Date()), 10);
+        } catch (e) {
+            console.log("Intl error:", e);
+        }
+
+        // Morning: 6 AM to 10 AM (06:00 to 10:00)
+        // Evening: 4 PM to 7 PM (16:00 to 19:00)
+        if ((hour >= 6 && hour < 10) || (hour >= 16 && hour < 19)) {
+            setBgImage(require('../assets/morningevening.png'));
+        }
+        // Day/Afternoon: 10 AM to 4 PM (10:00 to 16:00)
+        else if (hour >= 10 && hour < 16) {
+            setBgImage(require('../assets/image.jpg'));
+        }
+        // Night: 7 PM to 6 AM (19:00 to 06:00)
+        else {
+            setBgImage(require('../assets/nightView.png'));
+        }
+    }, []);
+
+    useEffect(() => {
+        updateBackground();
+        const interval = setInterval(updateBackground, 60000);
+        return () => clearInterval(interval);
+    }, [updateBackground]);
 
     useEffect(() => {
         setAudioModeAsync({
@@ -441,9 +473,10 @@ export default function GameHomeScreen() {
     };
 
     useFocusEffect(useCallback(() => {
+        updateBackground();
         loadCachedState();
         fetchGameState();
-    }, [currentIndex]));
+    }, [currentIndex, updateBackground]));
 
     const startWaterGame = () => {
         showRewardedAd(async () => {
@@ -819,7 +852,7 @@ export default function GameHomeScreen() {
 
 
 
-            <ImageBackground source={require('../assets/image.jpg')} style={styles.bg} resizeMode="stretch">
+            <ImageBackground source={bgImage} style={styles.bg} resizeMode="stretch">
                 {/* 🍎 FALLING FRUITS/COINS (Visible on main screen during harvest) */}
                 {particles.map(p => (
                     <Particle key={p.id} type={p.type} xPos={p.x} startY={p.startY} onFinish={() => setParticles(pts => pts.filter(x => x.id !== p.id))} />

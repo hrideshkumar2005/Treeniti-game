@@ -13,6 +13,8 @@ const { uploadCloud } = require('../config/cloudinary');
 router.post('/send-otp', otpRateLimit, authController.sendOTP);
 router.post('/login', loginRateLimit, authController.login);
 router.post('/register', loginRateLimit, authController.register);
+router.get('/check-mobile', authController.checkMobile);
+router.post('/forgot-password', loginRateLimit, authController.forgotPassword);
 
 // --- Protected Profile ---
 router.get('/profile', authMiddleware, authController.getProfile);

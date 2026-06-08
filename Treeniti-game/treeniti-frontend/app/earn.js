@@ -4,8 +4,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BannerAd, BannerAdSize, RewardedAd, RewardedAdEventType, AD_UNITS } from '../config/ads';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
+
+const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
+  requestNonPersonalizedAdsOnly: true,
+});
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +25,64 @@ export default function EarnMore() {
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  const [rewardedLoaded, setRewardedLoaded] = useState(false);
+
+  useEffect(() => {
+    const unsubscribeLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
+      setRewardedLoaded(true);
+    });
+
+    const unsubscribeEarned = rewardedAdInstance.addAdEventListener(
+      RewardedAdEventType.EARNED_REWARD,
+      async (reward) => {
+        await claimGoogleAdReward();
+      }
+    );
+
+    const unsubscribeClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+      setRewardedLoaded(false);
+      rewardedAdInstance.load();
+    });
+
+    rewardedAdInstance.load();
+
+    return () => {
+      unsubscribeLoaded();
+      unsubscribeEarned();
+      unsubscribeClosed();
+    };
+  }, []);
+
+  const claimGoogleAdReward = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const res = await fetch(`${BASE_URL}/wallet/claim-ad`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert("Success 🎉", "Reward claimed! Coins added to your wallet.");
+      } else {
+        Alert.alert("Claim Failed", data.error || "Could not verify reward.");
+      }
+    } catch (e) {
+      Alert.alert("Error", "Network error claiming reward.");
+    }
+  };
+
+  const showGoogleRewardedAd = () => {
+    if (rewardedLoaded) {
+      rewardedAdInstance.show();
+    } else {
+      Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+      rewardedAdInstance.load();
+    }
+  };
 
   const fetchConfig = async () => {
     try {
@@ -122,6 +185,14 @@ export default function EarnMore() {
             onPress={watchAdTrigger}
           />
 
+          <ActionCard 
+            icon={<Ionicons name="logo-google" size={26} color="#fff" />}
+            iconBg="#4285F4" 
+            title="Watch Google Video Ad"
+            btnText={rewardedLoaded ? "Watch" : "Loading..."}
+            onPress={showGoogleRewardedAd}
+          />
+
            <ActionCard 
             icon={<Ionicons name="trophy" size={24} color="#fff" />}
             iconBg="#FF8F00" 
@@ -149,6 +220,15 @@ export default function EarnMore() {
           />
         </View>
       </ScrollView>
+
+      {/* --- Google Banner Ad --- */}
+      <View style={styles.bannerContainer}>
+        <BannerAd
+          unitId={AD_UNITS.BANNER}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        />
+      </View>
 
       {/* Leaderboard Modal */}
       <Modal visible={showLB} transparent={true} animationType="slide" onRequestClose={()=>setShowLB(false)}>
@@ -275,5 +355,12 @@ const styles = StyleSheet.create({
   lbRank: { fontWeight: 'bold', width: 40, color: '#FBC02D' },
   lbName: { fontSize: 14, color: '#333', fontWeight: 'bold' },
   lbCoins: { fontWeight: 'bold', color: '#1B5E20' },
-  closeBtn: { marginTop: 20, backgroundColor: '#1B5E20', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 20 }
+  closeBtn: { marginTop: 20, backgroundColor: '#1B5E20', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 20 },
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+  },
 });

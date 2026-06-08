@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
 
@@ -37,6 +37,8 @@ const tokenAuth = process.env.EXPO_PUBLIC_MSG91_AUTH_TOKEN || '';
 const { width } = Dimensions.get('window');
 
 export default function Register() {
+  const router = useRouter();
+  const { refCode } = useLocalSearchParams();
   const [reqId, setReqId] = useState('');
 
   useEffect(() => {
@@ -50,13 +52,20 @@ export default function Register() {
       console.warn("MSG91 SendOTP is missing widgetId/tokenAuth config OR running in simulation environment");
     }
   }, []);
-  const router = useRouter();
+
   const [form, setForm] = useState({
+    name: '',
     mobile: '',
     loginPassword: '',
     confirmPassword: '',
     inviteCode: ''
   });
+
+  useEffect(() => {
+    if (refCode) {
+      setForm(prev => ({ ...prev, inviteCode: refCode }));
+    }
+  }, [refCode]);
 
   const [secure, setSecure] = useState({
     login: true,
@@ -69,6 +78,7 @@ export default function Register() {
 
   const handleRegisterPress = async () => {
     // Basic Validations
+    if (!form.name || form.name.trim().length < 2) return Alert.alert("Error", "Please enter a valid Username (minimum 2 characters).");
     if (!form.mobile || form.mobile.length !== 10) return Alert.alert("Error", "Please enter valid 10-digit mobile number.");
     if (form.loginPassword !== form.confirmPassword) return Alert.alert("Error", "Login passwords do not match.");
 
@@ -155,7 +165,8 @@ export default function Register() {
             otp: '123456', // Pass bypass master code internally to backend to complete session
             loginPassword: form.loginPassword,
             fundPassword: form.fundPassword,
-            refCode: form.inviteCode
+            refCode: form.inviteCode,
+            name: form.name
           })
         });
 
@@ -197,7 +208,8 @@ export default function Register() {
             otp: '123456', // Pass master bypass code since OTP is already verified on frontend
             loginPassword: form.loginPassword,
             fundPassword: form.fundPassword,
-            refCode: form.inviteCode
+            refCode: form.inviteCode,
+            name: form.name
           })
         });
 
@@ -240,6 +252,14 @@ export default function Register() {
         {/* Input Fields Style like Screenshot */}
         <View style={styles.formContainer}>
             <InputField 
+                icon="person-outline" 
+                placeholder="Please enter username (compulsory)" 
+                value={form.name} 
+                onChangeText={(t) => setForm({...form, name: t})}
+                maxLength={30}
+            />
+
+            <InputField 
                 icon="phone-portrait-outline" 
                 placeholder="Please enter your phone number" 
                 value={form.mobile} 
@@ -269,10 +289,10 @@ export default function Register() {
 
             <InputField 
                 icon="people-outline" 
-                placeholder="Enter a 6,8 digit invitation code" 
+                placeholder="Enter invitation code" 
                 value={form.inviteCode} 
                 onChangeText={(t) => setForm({...form, inviteCode: t})}
-                maxLength={8}
+                maxLength={12}
             />
 
             <TouchableOpacity style={styles.registerBtn} onPress={handleRegisterPress}>
