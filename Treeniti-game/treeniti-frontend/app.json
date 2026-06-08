@@ -49,7 +49,9 @@
         {
           "photosPermission": "Allow saving tree certificates to gallery."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
