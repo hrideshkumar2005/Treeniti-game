@@ -1,3 +1,6 @@
-android/.gradle
-.gradle/
+android/
+ios/
 node_modules/
+.expo/
+dist/
+web-build/
