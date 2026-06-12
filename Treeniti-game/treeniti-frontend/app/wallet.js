@@ -298,28 +298,40 @@ export default function WalletScreen() {
       </ScrollView>
 
       {/* --- 🟢 BOTTOM NAVBAR (Same as Home) --- */}
-      <View style={[styles.bottomTab, { height: 70 + insets.bottom, paddingBottom: insets.bottom }]}>
+      <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
         <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
         <TabItem icon="water-outline" label="Water" onPress={() => router.push('/plant')} />
         
-        <TouchableOpacity style={styles.centerBtn} activeOpacity={0.9} onPress={() => router.push('/upload_tree')}>
-          <View style={styles.centerBtnInner}>
-            <Ionicons name="camera" size={26} color="#fff" />
-            <Text style={styles.centerText}>PHOTO{"\n"}UPLOAD</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.centerCol}>
+          <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
+            <LinearGradient
+              colors={['#4CAF50', '#1B5E20']}
+              style={styles.centerBtnInner}
+            >
+              <Ionicons name="camera" size={22} color="#fff" style={{ marginBottom: 1 }} />
+              <Text style={styles.centerText}>UPLOAD</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
         <TabItem icon="leaf-outline" label="Fertilize" onPress={() => router.push('/plant')} />
-        <TabItem icon="cash-outline" label="Earn" onPress={() => router.push('/earn')} />
+        <TabItem icon="gift-outline" label="Earn" onPress={() => router.push('/earn')} />
       </View>
     </SafeAreaView>
   );
 }
 
 // Sub components
-const TabItem = ({ icon, label, onPress }) => (
-  <TouchableOpacity style={styles.tabBtn} onPress={onPress}>
-    <Ionicons name={icon} size={20} color="#fff" />
+const TabItem = ({ icon, label, active, onPress }) => (
+  <TouchableOpacity
+    style={styles.tabBtn}
+    onPress={onPress}
+    activeOpacity={0.7}
+    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  >
+    <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
+      <Ionicons name={icon} size={24} color={active ? "#1B5E20" : "#fff"} />
+    </View>
     <Text style={styles.tabLabel}>{label}</Text>
   </TouchableOpacity>
 );
@@ -389,10 +401,28 @@ const styles = StyleSheet.create({
   secSub: { fontSize: 9, color: '#666', marginTop: 4 },
 
   // Navbar
-  bottomTab: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#6DBE71', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopLeftRadius: 30, borderTopRightRadius: 30, elevation: 10 },
-  tabBtn: { alignItems: 'center', flex: 1 },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 4, fontWeight: 'bold', textAlign: 'center' },
-  centerBtn: { marginTop: -45, alignItems: 'center' },
-  centerBtnInner: { width: 68, height: 68, backgroundColor: '#1B3C1B', borderRadius: 34, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 4, borderColor: '#F7FAF7' },
-  centerText: { fontSize: 6, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -2 }
+  bottomTab: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: '#1B5E20',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    zIndex: 9999
+  },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+  tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  activeTabIcon: { backgroundColor: '#fff' },
+  tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+  centerBtn: { marginTop: -22, alignItems: 'center', zIndex: 10000 },
+  centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' }
 });

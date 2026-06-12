@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ConfigProvider } from '../context/ConfigContext';
 import { LanguageProvider } from '../context/LanguageContext';
+import '../config/ads';
 
 export default function RootLayout() {
   return (

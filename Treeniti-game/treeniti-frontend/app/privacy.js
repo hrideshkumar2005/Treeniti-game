@@ -23,7 +23,7 @@ export default function PrivacyPolicy() {
         <View style={styles.card}>
             <Text style={styles.sectionTitle}>1. Data Collection</Text>
             <Text style={styles.text}>
-              Treeniti collects minimal user data including mobile number, name, and device ID to ensure account security and prevent fraud.
+              Treeniti collects minimal user data including mobile number, name, email address, and device ID to ensure account security and prevent fraud.
             </Text>
 
             <Text style={styles.sectionTitle}>2. Location Services</Text>
@@ -41,8 +41,18 @@ export default function PrivacyPolicy() {
               Treeniti complies with all Google Play Store policies regarding gamification and real-money rewards. This app is for users 13+ only (18+ for monetary withdrawals).
             </Text>
 
+            <Text style={styles.sectionTitle}>5. Data Retention Policy</Text>
+            <Text style={styles.text}>
+              We retain your personal data (name, email, and mobile number) and app activity data only for as long as your account remains active. If your account is inactive or you request its deletion, your personal data will be permanently deleted from our active servers within 30 days. System and device logs collected for security and fraud detection are retained for a maximum of 90 days.
+            </Text>
+
+            <Text style={styles.sectionTitle}>6. Data Deletion Rights</Text>
+            <Text style={styles.text}>
+              You have the right to request the deletion of your account and all associated user data at any time. You can request account deletion via the in-app support options, by sending an email to treenitiofficial@gmail.com, or by using the deletion request form on our website.
+            </Text>
+
             <View style={styles.divider} />
-            <Text style={styles.footer}>Last updated: April 2026</Text>
+            <Text style={styles.footer}>Last updated: June 2026</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

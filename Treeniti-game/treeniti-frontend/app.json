@@ -2,7 +2,7 @@
   "expo": {
     "name": "Treeniti",
     "slug": "treeniti",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "icon": "./assets/treeniti_logo.png",
     "splash": {
       "image": "./assets/blank.png",
@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.treeniti.app2",
+      "versionCode": 12,
       "blockedPermissions": [
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",

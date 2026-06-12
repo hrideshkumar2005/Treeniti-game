@@ -41,3 +41,9 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Android native build cache and local properties
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

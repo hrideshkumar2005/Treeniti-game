@@ -23,6 +23,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import BASE_URL from '../config/api';
+import { RewardedAd, RewardedAdEventType, AD_UNITS } from '../config/ads';
+
+const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
+    requestNonPersonalizedAdsOnly: true,
+});
 
 const { width, height } = Dimensions.get('window');
 
@@ -266,22 +271,61 @@ export default function GameHomeScreen() {
     const [adCountdown, setAdCountdown] = useState(5);
     const adTimerRef = useRef(null);
     const adCallbackRef = useRef(null);
+    const [rewardedLoaded, setRewardedLoaded] = useState(false);
+
+    useEffect(() => {
+        const unsubscribeLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
+            setRewardedLoaded(true);
+        });
+
+        const unsubscribeEarned = rewardedAdInstance.addAdEventListener(
+            RewardedAdEventType.EARNED_REWARD,
+            () => {
+                if (adCallbackRef.current) {
+                    adCallbackRef.current();
+                    adCallbackRef.current = null;
+                }
+            }
+        );
+
+        const unsubscribeClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+            setRewardedLoaded(false);
+            rewardedAdInstance.load();
+        });
+
+        rewardedAdInstance.load();
+
+        return () => {
+            unsubscribeLoaded();
+            unsubscribeEarned();
+            unsubscribeClosed();
+        };
+    }, []);
 
     const showRewardedAd = (onRewardEarned) => {
-        adCallbackRef.current = onRewardEarned;
-        setAdCountdown(5);
-        setShowAdModal(true);
+        if (rewardedLoaded) {
+            adCallbackRef.current = onRewardEarned;
+            rewardedAdInstance.show();
+        } else {
+            // Fallback to local simulated countdown ad modal so the user is never stuck
+            adCallbackRef.current = onRewardEarned;
+            setAdCountdown(5);
+            setShowAdModal(true);
 
-        let count = 5;
-        adTimerRef.current = setInterval(() => {
-            count -= 1;
-            setAdCountdown(count);
-            if (count <= 0) {
-                clearInterval(adTimerRef.current);
-                setShowAdModal(false);
-                if (adCallbackRef.current) adCallbackRef.current();
-            }
-        }, 1000);
+            let count = 5;
+            adTimerRef.current = setInterval(() => {
+                count -= 1;
+                setAdCountdown(count);
+                if (count <= 0) {
+                    clearInterval(adTimerRef.current);
+                    setShowAdModal(false);
+                    if (adCallbackRef.current) {
+                        adCallbackRef.current();
+                        adCallbackRef.current = null;
+                    }
+                }
+            }, 1000);
+        }
     };
 
     const barAnim = useRef(new Animated.Value(0)).current;
@@ -768,7 +812,7 @@ export default function GameHomeScreen() {
                 setParticles(p => [...p.slice(-45), { 
                     id, 
                     x, 
-                    startY: height * 0.39, 
+                    startY: height * 0.60, 
                     type: 'water',
                     scale: Math.random() * 0.3 + 0.7
                 }]);
@@ -900,9 +944,11 @@ export default function GameHomeScreen() {
                         <View style={styles.plantIconBox}>
                             <Ionicons name="leaf" size={16} color="#fff" />
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={styles.plantStatusTitle}>{currentTree.treeName || 'My Plant'}</Text>
+                        <View style={{ flex: 1, justifyContent: 'center', paddingRight: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.plantStatusTitle, { flexShrink: 1 }]} numberOfLines={1}>
+                                    {currentTree.treeName || 'My Plant'}
+                                </Text>
                                 {currentTree.mood && (
                                     <View style={styles.moodPill}>
                                         <Text style={styles.moodText}>
@@ -914,7 +960,7 @@ export default function GameHomeScreen() {
                                     </View>
                                 )}
                             </View>
-                            <Text style={styles.plantStatusDay}>Day {currentTree.daysGrowing || 1} · {currentTree.level || 'Seed'}</Text>
+                            <Text style={styles.plantStatusDay} numberOfLines={1}>Day {currentTree.daysGrowing || 1} · {currentTree.level || 'Seed'}</Text>
                         </View>
                         <View style={styles.growthPill}>
                             <Text style={styles.growthPillText}>{typeof currentTree.growth === 'number' ? Math.round(currentTree.growth) : 0}%</Text>
@@ -1011,7 +1057,7 @@ export default function GameHomeScreen() {
                             {
                                 translateY: waterCanAnim.interpolate({
                                     inputRange: [0, 1],
-                                    outputRange: [height * 0.15, height * 0.28]
+                                    outputRange: [height * 0.25, height * 0.40]
                                 })
                             },
                             {
@@ -1345,8 +1391,8 @@ const styles = StyleSheet.create({
     lockedShakeBtn: { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.3)' },
     shakeLockBadge: { position: 'absolute', top: -15, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)', zIndex: 99 },
     shakeLockText: { color: '#FFD700', fontSize: 7, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
-    moodPill: { marginLeft: 10, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-    moodText: { fontSize: 14 },
+    moodPill: { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    moodText: { fontSize: 11 },
 
     bottomTab: {
       position: 'absolute',

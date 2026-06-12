@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Alert, Linking, ActivityIndicator, Animated, Easing, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
@@ -233,12 +234,12 @@ export default function FollowUs() {
         {/* --- 📝 Mission List --- */}
         <View style={styles.listContainer}>
           {[
-            { id: 'YouTube', title: language === 'hi' ? 'TREENITI TV को सब्सक्राइब करें' : "Subscribe to TREENITI TV", icon: <Ionicons name="logo-youtube" size={28} color="#FF0000" /> },
-            { id: 'Facebook', title: language === 'hi' ? 'फेसबुक पेज को लाइक करें' : "Like Facebook Page", icon: <Ionicons name="logo-facebook" size={28} color="#1877F2" /> },
-            { id: 'Instagram', title: language === 'hi' ? 'इंस्टाग्राम पर फॉलो करें' : "Follow us on Instagram", icon: <Ionicons name="logo-instagram" size={28} color="#E1306C" /> },
-            { id: 'X', title: language === 'hi' ? 'X (ट्विटर) पर फॉलो करें' : "Follow on X (Twitter)", icon: <Ionicons name="logo-twitter" size={28} color="#000000" /> },
-            { id: 'WhatsApp', title: language === 'hi' ? 'व्हाट्सएप स्टेटस शेयर करें' : "Share WhatsApp Status", icon: <Ionicons name="logo-whatsapp" size={28} color="#25D366" /> },
-            { id: 'Telegram', title: language === 'hi' ? 'टेलीग्राम चैनल ज्वाइन करें' : "Join Telegram Channel", icon: <Ionicons name="paper-plane" size={28} color="#0088cc" /> },
+            { id: 'YouTube', title: language === 'hi' ? 'TREENITI TV को सब्सक्राइब करें' : "Subscribe to TREENITI TV", icon: <Ionicons name="logo-youtube" size={28} color="#FF0000" />, brandColor: '#FF0000' },
+            { id: 'Facebook', title: language === 'hi' ? 'फेसबुक पेज को लाइक करें' : "Like Facebook Page", icon: <Ionicons name="logo-facebook" size={28} color="#1877F2" />, brandColor: '#1877F2' },
+            { id: 'Instagram', title: language === 'hi' ? 'इंस्टाग्राम पर फॉलो करें' : "Follow us on Instagram", icon: <Ionicons name="logo-instagram" size={28} color="#E1306C" />, brandColor: '#E1306C' },
+            { id: 'X', title: language === 'hi' ? 'X (ट्विटर) पर फॉलो करें' : "Follow on X (Twitter)", icon: <Ionicons name="logo-twitter" size={28} color="#000000" />, brandColor: '#000000' },
+            { id: 'WhatsApp', title: language === 'hi' ? 'व्हाट्सएप स्टेटस शेयर करें' : "Share WhatsApp Status", icon: <Ionicons name="logo-whatsapp" size={28} color="#25D366" />, brandColor: '#25D366' },
+            { id: 'Telegram', title: language === 'hi' ? 'टेलीग्राम चैनल ज्वाइन करें' : "Join Telegram Channel", icon: <Ionicons name="paper-plane" size={28} color="#0088cc" />, brandColor: '#0088cc' },
           ].map((mission) => (
             <MissionCard 
               key={mission.id}
@@ -249,6 +250,7 @@ export default function FollowUs() {
               completed={isClaimed(mission.id)}
               loading={claiming === mission.id}
               t={t}
+              brandColor={mission.brandColor}
             />
           ))}
         </View>
@@ -256,19 +258,24 @@ export default function FollowUs() {
       </ScrollView>
 
       {/* --- 🟢 Fixed Bottom Navbar --- */}
-      <View style={[styles.bottomTab, { height: 70 + insets.bottom, paddingBottom: insets.bottom }]}>
+      <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
         <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
         <TabItem icon="water-outline" label="Water" onPress={() => router.push('/plant')} />
         
-        <TouchableOpacity style={styles.centerBtn} activeOpacity={0.9} onPress={() => router.push('/upload_tree')}>
-          <View style={styles.centerBtnInner}>
-            <Ionicons name="camera" size={26} color="#fff" />
-            <Text style={styles.centerText}>PHOTO{"\n"}UPLOAD</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.centerCol}>
+          <TouchableOpacity style={styles.centerBtn} activeOpacity={0.85} onPress={() => router.push('/upload_tree')}>
+            <LinearGradient
+              colors={['#4CAF50', '#1B5E20']}
+              style={styles.centerBtnInner}
+            >
+              <Ionicons name="camera" size={22} color="#fff" style={{ marginBottom: 1 }} />
+              <Text style={styles.centerText}>UPLOAD</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
         <TabItem icon="leaf-outline" label={t.fertilize || "Fertilize"} onPress={() => router.push('/plant')} />
-        <TabItem icon="cash-outline" label={t.earn || "Earn"} onPress={() => router.push('/earn')} />
+        <TabItem icon="gift-outline" label={t.earn || "Earn"} active={true} onPress={() => router.push('/earn')} />
       </View>
 
       {/* 🪙 Golden Flying Coins Overlay Wrapper */}
@@ -311,8 +318,12 @@ export default function FollowUs() {
 }
 
  // --- Mission Card Helper Component ---
-const MissionCard = ({ icon, title, reward, onPress, completed, loading, t }) => (
-  <View style={[styles.card, completed && { opacity: 0.7 }]}>
+const MissionCard = ({ icon, title, reward, onPress, completed, loading, t, brandColor }) => (
+  <View style={[
+    styles.card, 
+    completed && { opacity: 0.7 },
+    { borderLeftWidth: 4, borderLeftColor: brandColor }
+  ]}>
     <View style={styles.iconCircle}>
       {icon}
     </View>
@@ -324,7 +335,10 @@ const MissionCard = ({ icon, title, reward, onPress, completed, loading, t }) =>
       </View>
     </View>
     <TouchableOpacity 
-      style={[styles.claimBtn, completed && { backgroundColor: '#4CAF50' }]} 
+      style={[
+        styles.claimBtn, 
+        completed ? { backgroundColor: '#4CAF50' } : { backgroundColor: brandColor }
+      ]} 
       activeOpacity={0.7} 
       onPress={onPress}
       disabled={completed || loading}
@@ -338,9 +352,16 @@ const MissionCard = ({ icon, title, reward, onPress, completed, loading, t }) =>
   </View>
 );
 
-const TabItem = ({ icon, label, onPress }) => (
-  <TouchableOpacity style={styles.tabBtn} onPress={onPress}>
-    <Ionicons name={icon} size={20} color="#fff" />
+const TabItem = ({ icon, label, active, onPress }) => (
+  <TouchableOpacity
+    style={styles.tabBtn}
+    onPress={onPress}
+    activeOpacity={0.7}
+    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  >
+    <View style={[styles.tabIconCircle, active && styles.activeTabIcon]}>
+      <Ionicons name={icon} size={24} color={active ? "#1B5E20" : "#fff"} />
+    </View>
     <Text style={styles.tabLabel}>{label}</Text>
   </TouchableOpacity>
 );
@@ -414,12 +435,30 @@ const styles = StyleSheet.create({
   claimBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
 
   // --- Navbar Styles ---
-  bottomTab: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#6DBE71', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopLeftRadius: 30, borderTopRightRadius: 30, elevation: 10 },
-  tabBtn: { alignItems: 'center', flex: 1 },
-  tabLabel: { fontSize: 8, color: '#fff', marginTop: 4, fontWeight: 'bold', textAlign: 'center' },
-  centerBtn: { marginTop: -45, alignItems: 'center' },
-  centerBtnInner: { width: 68, height: 68, backgroundColor: '#1B3C1B', borderRadius: 34, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 4, borderColor: '#fff' },
-  centerText: { fontSize: 6, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: -2 },
+  bottomTab: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: '#1B5E20',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    zIndex: 9999
+  },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', flex: 1, marginTop: -5 },
+  tabIconCircle: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  activeTabIcon: { backgroundColor: '#fff' },
+  tabLabel: { fontSize: 9.5, color: '#fff', marginTop: 2, fontWeight: 'bold', textAlign: 'center' },
+  centerBtn: { marginTop: -22, alignItems: 'center', zIndex: 10000 },
+  centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   goldCoin: {
     width: 24,
     height: 24,
