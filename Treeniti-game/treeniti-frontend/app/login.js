@@ -33,14 +33,14 @@ const OTPWidget = {
   },
   async sendOTP({ identifier }) {
     try {
-      const response = await fetch('https://api.msg91.com/api/v5/widget/sendOtp', {
+      const response = await fetch('https://control.msg91.com/api/v5/widget/sendOtpMobile', {
         method: 'POST',
         headers: {
-          'authkey': this.tokenAuth,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           widgetId: this.widgetId,
+          tokenAuth: this.tokenAuth,
           identifier: identifier
         })
       });
@@ -52,14 +52,14 @@ const OTPWidget = {
   },
   async verifyOTP({ reqId, otp }) {
     try {
-      const response = await fetch('https://api.msg91.com/api/v5/widget/verifyOtp', {
+      const response = await fetch('https://control.msg91.com/api/v5/widget/verifyOtp', {
         method: 'POST',
         headers: {
-          'authkey': this.tokenAuth,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           widgetId: this.widgetId,
+          tokenAuth: this.tokenAuth,
           reqId: reqId,
           otp: otp
         })
@@ -72,14 +72,14 @@ const OTPWidget = {
   },
   async retryOTP({ reqId, retryChannel }) {
     try {
-      const response = await fetch('https://api.msg91.com/api/v5/widget/retryOtp', {
+      const response = await fetch('https://control.msg91.com/api/v5/widget/retryOtp', {
         method: 'POST',
         headers: {
-          'authkey': this.tokenAuth,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           widgetId: this.widgetId,
+          tokenAuth: this.tokenAuth,
           reqId: reqId,
           retryChannel: retryChannel || 11
         })
