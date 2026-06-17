@@ -2,7 +2,7 @@
   "expo": {
     "name": "Treeniti",
     "slug": "treeniti",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "version": "1.0.5",
     "icon": "./assets/treeniti_logo.png",
     "splash": {

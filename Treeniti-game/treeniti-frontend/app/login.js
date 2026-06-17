@@ -23,13 +23,74 @@ import { useLanguage } from '../context/LanguageContext';
 
 
 
-// Safe MSG91 SDK Import (Prevents crash in Expo Go / missing native module environment)
-let OTPWidget = null;
-try {
-  OTPWidget = require('@msg91comm/sendotp-react-native').OTPWidget;
-} catch (error) {
-  console.warn("MSG91 SendOTP Native Module is not linked/available. Falling back to Simulation Mode.", error);
-}
+// Pure JS implementation of MSG91 OTPWidget (No native modules required)
+const OTPWidget = {
+  widgetId: '',
+  tokenAuth: '',
+  initializeWidget(wId, tAuth) {
+    this.widgetId = wId;
+    this.tokenAuth = tAuth;
+  },
+  async sendOTP({ identifier }) {
+    try {
+      const response = await fetch('https://api.msg91.com/api/v5/widget/sendOtp', {
+        method: 'POST',
+        headers: {
+          'authkey': this.tokenAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          widgetId: this.widgetId,
+          identifier: identifier
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("MSG91 sendOTP HTTP error:", error);
+      return { type: 'error', message: error.message };
+    }
+  },
+  async verifyOTP({ reqId, otp }) {
+    try {
+      const response = await fetch('https://api.msg91.com/api/v5/widget/verifyOtp', {
+        method: 'POST',
+        headers: {
+          'authkey': this.tokenAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          widgetId: this.widgetId,
+          reqId: reqId,
+          otp: otp
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("MSG91 verifyOTP HTTP error:", error);
+      return { type: 'error', message: error.message };
+    }
+  },
+  async retryOTP({ reqId, retryChannel }) {
+    try {
+      const response = await fetch('https://api.msg91.com/api/v5/widget/retryOtp', {
+        method: 'POST',
+        headers: {
+          'authkey': this.tokenAuth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          widgetId: this.widgetId,
+          reqId: reqId,
+          retryChannel: retryChannel || 11
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("MSG91 retryOTP HTTP error:", error);
+      return { type: 'error', message: error.message };
+    }
+  }
+};
 
 // MSG91 SendOTP Configuration
 const widgetId = '366573726354373030383232';
