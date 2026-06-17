@@ -2,6 +2,7 @@
   "expo": {
     "name": "Treeniti",
     "slug": "treeniti",
+    "newArchEnabled": false,
     "version": "1.0.5",
     "icon": "./assets/treeniti_logo.png",
     "splash": {
@@ -55,9 +56,11 @@
       "expo-asset"
     ],
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "80904a37-79a8-464a-9ce3-57a20bb76e80"
+        "projectId": "cb821a54-e82d-4a6c-ba96-619e287a4b56"
       }
-    }
+    },
+    "owner": "hridesh2005"
   }
 }

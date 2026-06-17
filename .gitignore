@@ -1,0 +1,8 @@
+**/android/
+**/ios/
+**/node_modules/
+**/.expo/
+**/dist/
+**/web-build/
+Treeniti-game/treeniti-backend/
+Treeniti-game/treeniti-web-admin/

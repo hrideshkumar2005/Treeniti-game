@@ -1,28 +1,37 @@
 import React from 'react';
-import { View, Text, Alert } from 'react-native';
+import { View, Text, Alert, NativeModules } from 'react-native';
 
 // Try to safely import react-native-google-mobile-ads
 let googleMobileAds = null;
 let isAdmobAvailable = false;
 
 try {
-  googleMobileAds = require('react-native-google-mobile-ads');
-  isAdmobAvailable = true;
-  
-  // Safely initialize the Mobile Ads SDK
-  const mobileAds = googleMobileAds.default || googleMobileAds;
-  if (typeof mobileAds === 'function') {
-    mobileAds()
-      .initialize()
-      .then((adapterStatuses) => {
-        console.log('AdMob SDK initialized successfully:', adapterStatuses);
-      })
-      .catch((err) => {
-        console.log('AdMob SDK initialization failed:', err);
-      });
+  // Check if the native module actually exists in the runtime environment
+  // In Expo Go or simulator builds without native libraries, NativeModules won't contain any RNGoogleMobileAds keys.
+  const hasNativeAdModule = NativeModules && Object.keys(NativeModules).some(key => key.startsWith('RNGoogleMobileAds'));
+
+  if (hasNativeAdModule) {
+    googleMobileAds = require('react-native-google-mobile-ads');
+    isAdmobAvailable = true;
+    
+    // Safely initialize the Mobile Ads SDK
+    const mobileAds = googleMobileAds.default || googleMobileAds;
+    if (typeof mobileAds === 'function') {
+      mobileAds()
+        .initialize()
+        .then((adapterStatuses) => {
+          console.log('AdMob SDK initialized successfully:', adapterStatuses);
+        })
+        .catch((err) => {
+          console.log('AdMob SDK initialization failed:', err);
+        });
+    }
+  } else {
+    console.log("AdMob native modules not found in NativeModules, falling back to simulator mock ads.");
+    isAdmobAvailable = false;
   }
 } catch (error) {
-  console.log("AdMob native modules not found, falling back to simulator mock ads.");
+  console.log("Error checking/loading AdMob SDK:", error);
   isAdmobAvailable = false;
 }
 
