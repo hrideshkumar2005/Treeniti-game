@@ -6,7 +6,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 import BASE_URL from '../config/api';
 
 const { width } = Dimensions.get('window');
@@ -156,17 +155,9 @@ export default function Certificate() {
 const CertificateCard = ({ tree, userName }) => {
   const viewRef = useRef();
   const [loading, setLoading] = useState(false);
-
   const handleDownload = async () => {
     try {
       setLoading(true);
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert("Permission Denied", "We need storage permissions to save the certificate to your gallery.");
-        setLoading(false);
-        return;
-      }
-
       const uri = await captureRef(viewRef, {
         format: 'png',
         quality: 1.0,
@@ -175,31 +166,14 @@ const CertificateCard = ({ tree, userName }) => {
 
       if (!uri) throw new Error("Capture failed");
 
-      const asset = await MediaLibrary.createAssetAsync(uri);
-      
-      try {
-        const album = await MediaLibrary.getAlbumAsync('Treeniti');
-        if (album == null) {
-          await MediaLibrary.createAlbumAsync('Treeniti', asset, false);
-        } else {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-        }
-      } catch (albumError) {
-        console.log("Album error (non-fatal):", albumError);
-      }
-
-      Alert.alert(
-        "🎉 Success", 
-        "Certificate saved to your Gallery! 🌳",
-        [{ text: "OK" }, { text: "Share Instead", onPress: () => Sharing.shareAsync(uri) }]
-      );
+      // Directly open the share sheet which allows saving the image locally or sharing it to other apps without permissions.
+      await Sharing.shareAsync(uri, {
+        dialogTitle: 'Save or Share Certificate',
+        mimeType: 'image/png'
+      });
     } catch (error) {
       console.error("Download Error:", error);
-      Alert.alert("Download Failed", "Something went wrong. You can try sharing the certificate instead.");
-      try {
-        const uri = await captureRef(viewRef, { format: 'png', quality: 0.8 });
-        if (uri) await Sharing.shareAsync(uri);
-      } catch (e) {}
+      Alert.alert("Error", "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

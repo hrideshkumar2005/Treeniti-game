@@ -17,7 +17,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
 import BASE_URL from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -146,16 +145,6 @@ export default function UploadTree() {
       if (!result.canceled) {
         const imageUri = result.assets ? result.assets[0].uri : result.uri;
         if (imageUri) {
-          // Auto-save the taken photo to device gallery
-          try {
-            const { status: mediaStatus } = await MediaLibrary.requestPermissionsAsync();
-            if (mediaStatus === 'granted') {
-              await MediaLibrary.saveToLibraryAsync(imageUri);
-            }
-          } catch(e) {
-            console.log("Could not save to gallery", e);
-          }
-          
           console.log("📸 Image URI:", imageUri);
           setImages(prev => [...prev, { uri: imageUri }].slice(0, 4));
         }
