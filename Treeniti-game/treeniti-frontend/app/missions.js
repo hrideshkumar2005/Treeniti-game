@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
+import { RewardedAd, RewardedAdEventType, AD_UNITS, adInitPromise, globalRewardedAd } from '../config/ads';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 500;
@@ -23,6 +24,63 @@ export default function MissionsScreen() {
   const [config, setConfig] = useState(null);
   const [adPlaying, setAdPlaying] = useState(false);
   const [adCountdown, setAdCountdown] = useState(5);
+  const [rewardedLoaded, setRewardedLoaded] = useState(false);
+
+  useEffect(() => {
+    let unsubscribeLoaded = () => {};
+    let unsubscribeEarned = () => {};
+    let unsubscribeClosed = () => {};
+
+    const setupAd = () => {
+      const ad = globalRewardedAd;
+      if (!ad) {
+        console.log("globalRewardedAd is not created yet in missions.js");
+        return;
+      }
+
+      setRewardedLoaded(ad.loaded || false);
+
+      unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        setRewardedLoaded(true);
+      });
+
+      unsubscribeEarned = ad.addAdEventListener(
+        RewardedAdEventType.EARNED_REWARD,
+        () => {
+          handleSpin(true);
+        }
+      );
+
+      unsubscribeClosed = ad.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+        setRewardedLoaded(false);
+        try {
+          ad.load();
+        } catch (err) {
+          console.log("Error reloading global rewarded ad in missions.js on close:", err);
+        }
+      });
+
+      if (!ad.loaded) {
+        try {
+          ad.load();
+        } catch (err) {}
+      }
+    };
+
+    if (adInitPromise) {
+      adInitPromise.then(() => {
+        setupAd();
+      });
+    } else {
+      setupAd();
+    }
+
+    return () => {
+      unsubscribeLoaded();
+      unsubscribeEarned();
+      unsubscribeClosed();
+    };
+  }, []);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const rotationState = useRef(0);
   const spinSoundRef = useRef(null);
@@ -85,8 +143,22 @@ export default function MissionsScreen() {
   }, [adPlaying, adCountdown]);
 
   const triggerAdWatch = () => {
-    setAdPlaying(true);
-    setAdCountdown(5);
+    try {
+      const ad = globalRewardedAd;
+      if (rewardedLoaded && ad) {
+        ad.show();
+      } else {
+        Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+        if (ad) {
+          try {
+            ad.load();
+          } catch (err) {}
+        }
+      }
+    } catch (e) {
+      console.log("Error playing rewarded ad in missions:", e);
+      Alert.alert("Ad Error", "Failed to display video ad. Please try again.");
+    }
   };
 
   const triggerCoinAnimation = (startX = width / 2 - 12, startY = Dimensions.get('window').height / 2) => {
@@ -543,27 +615,7 @@ export default function MissionsScreen() {
         </View>
       </SafeAreaView>
 
-      {/* 🎥 Full-screen Gamified Ad Player Overlay */}
-      {adPlaying && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="auto">
-          <LinearGradient
-            colors={['rgba(0,0,0,0.95)', 'rgba(27,94,32,0.98)']}
-            style={styles.adFullscreenContainer}
-          >
-            <View style={styles.adBox}>
-              <MaterialCommunityIcons name="play-circle" size={80} color="#FFD700" style={styles.adIconAnim} />
-              <Text style={styles.adTitle}>SPONSOR VIDEO AD</Text>
-              <Text style={styles.adSub}>Reward unlocked in: <Text style={styles.adTimerText}>{adCountdown}s</Text></Text>
-              
-              <View style={styles.adProgressBarContainer}>
-                <View style={[styles.adProgressBarFill, { width: `${(adCountdown / 5) * 100}%` }]} />
-              </View>
 
-              <Text style={styles.adFooter}>Please do not close the ad to claim your Spin!</Text>
-            </View>
-          </LinearGradient>
-        </View>
-      )}
     </View>
   );
 }

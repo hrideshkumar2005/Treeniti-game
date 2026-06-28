@@ -280,7 +280,7 @@ export default function Home() {
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 185 }}>
           <View style={{ paddingHorizontal: 20, paddingTop: 5, paddingBottom: 5 }}>
             <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1B5E20' }}>Welcome, {userData.name} 👋</Text>
           </View>
@@ -371,7 +371,7 @@ export default function Home() {
             ))}
           </View>
 
-          {/* 📢 Ads Section Placeholder */}
+          {/* 📢 Ads Section */}
           <View style={styles.adSectionContainer}>
             <View style={styles.adHeader}>
               <View style={styles.sponsoredBadge}>
@@ -379,25 +379,13 @@ export default function Home() {
               </View>
               <Ionicons name="information-circle-outline" size={14} color="#999" />
             </View>
-            <TouchableOpacity activeOpacity={0.9} style={styles.adCard}>
-              <LinearGradient
-                colors={['#E8F5E9', '#F1F8E1']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.adGradient}
-              >
-                <View style={styles.adContent}>
-                  <View style={styles.adIconBox}>
-                    <Ionicons name="megaphone-outline" size={24} color="#1B5E20" />
-                  </View>
-                  <View style={styles.adTextBox}>
-                    <Text style={styles.adTitle}>Promote Your Mission!</Text>
-                    <Text style={styles.adSubTitle}>Feature your brand here to reach our green community.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#1B5E20" />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: '#eee' }}>
+              <BannerAd
+                unitId={AD_UNITS.BANNER}
+                size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+                requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+              />
+            </View>
           </View>
 
           {/* 🔴 LIVE Community Notice Board */}
@@ -542,7 +530,7 @@ export default function Home() {
         </ScrollView>
 
         {/* --- Google Banner Ad --- */}
-        <View style={styles.bannerContainer}>
+        <View style={[styles.bannerContainer, { bottom: 60 + insets.bottom }]}>
           <BannerAd
             unitId={AD_UNITS.BANNER}
             size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
@@ -971,10 +959,12 @@ const styles = StyleSheet.create({
   lbMyRankText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   lbMyCoinsText: { color: '#FFD700', fontWeight: 'bold', fontSize: 15 },
   bannerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    paddingVertical: 2,
     backgroundColor: 'transparent',
+    zIndex: 99,
   },
 });

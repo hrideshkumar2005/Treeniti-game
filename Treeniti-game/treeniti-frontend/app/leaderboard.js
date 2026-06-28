@@ -5,6 +5,7 @@ import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-ico
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
+import { BannerAd, BannerAdSize, AD_UNITS } from '../config/ads';
 
 export default function Leaderboard() {
   const router = useRouter();
@@ -69,7 +70,7 @@ export default function Leaderboard() {
       </View>
 
       <ScrollView 
-        contentContainerStyle={{paddingBottom: 100}}
+        contentContainerStyle={{paddingBottom: 180}}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
       >
         {loading ? (
@@ -143,6 +144,14 @@ export default function Leaderboard() {
              <Text style={styles.myCoinsText}>{currentUserRank?.score || 0} {getMetricLabel()}</Text>
           </View>
       )}
+
+      {/* Banner Ad at bottom */}
+      <View style={styles.bannerContainer}>
+        <BannerAd 
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} 
+          unitId={AD_UNITS.BANNER} 
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -189,8 +198,15 @@ const styles = StyleSheet.create({
   
   emptyText: { textAlign: 'center', marginTop: 50, color: '#999' },
 
-  myRankBar: { position: 'absolute', bottom: 30, left: 20, right: 20, backgroundColor: '#1B3C1B', borderRadius: 25, padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 15, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
+  myRankBar: { position: 'absolute', bottom: 95, left: 20, right: 20, backgroundColor: '#1B3C1B', borderRadius: 25, padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 15, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
   myRankCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   myRankText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  myCoinsText: { color: '#FFD700', fontWeight: 'bold', fontSize: 16 }
+  myCoinsText: { color: '#FFD700', fontWeight: 'bold', fontSize: 16 },
+
+  bannerContainer: {
+    backgroundColor: '#1B5E20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 5,
+  }
 });

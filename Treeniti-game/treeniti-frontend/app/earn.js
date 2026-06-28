@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, ScrollView, Alert, ActivityIndicator, Modal, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BannerAd, BannerAdSize, RewardedAd, RewardedAdEventType, AD_UNITS } from '../config/ads';
+import { BannerAd, BannerAdSize, RewardedAd, RewardedAdEventType, AD_UNITS, adInitPromise, globalRewardedAd } from '../config/ads';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
-
-const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
-  requestNonPersonalizedAdsOnly: true,
-});
 
 const { width } = Dimensions.get('window');
 
@@ -21,31 +17,60 @@ export default function EarnMore() {
   const [showLB, setShowLB] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [config, setConfig] = useState(null);
+  const [rewardedLoaded, setRewardedLoaded] = useState(false);
 
   useEffect(() => {
     fetchConfig();
   }, []);
 
-  const [rewardedLoaded, setRewardedLoaded] = useState(false);
-
   useEffect(() => {
-    const unsubscribeLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      setRewardedLoaded(true);
-    });
+    let unsubscribeLoaded = () => {};
+    let unsubscribeEarned = () => {};
+    let unsubscribeClosed = () => {};
 
-    const unsubscribeEarned = rewardedAdInstance.addAdEventListener(
-      RewardedAdEventType.EARNED_REWARD,
-      async (reward) => {
-        await claimGoogleAdReward();
+    const setupAd = () => {
+      const ad = globalRewardedAd;
+      if (!ad) {
+        console.log("globalRewardedAd is not created yet in earn.js");
+        return;
       }
-    );
 
-    const unsubscribeClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
-      setRewardedLoaded(false);
-      rewardedAdInstance.load();
-    });
+      setRewardedLoaded(ad.loaded || false);
 
-    rewardedAdInstance.load();
+      unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        setRewardedLoaded(true);
+      });
+
+      unsubscribeEarned = ad.addAdEventListener(
+        RewardedAdEventType.EARNED_REWARD,
+        async (reward) => {
+          await claimGoogleAdReward();
+        }
+      );
+
+      unsubscribeClosed = ad.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+        setRewardedLoaded(false);
+        try {
+          ad.load();
+        } catch (err) {
+          console.log("Error reloading global rewarded ad in earn.js on close:", err);
+        }
+      });
+
+      if (!ad.loaded) {
+        try {
+          ad.load();
+        } catch (err) {}
+      }
+    };
+
+    if (adInitPromise) {
+      adInitPromise.then(() => {
+        setupAd();
+      });
+    } else {
+      setupAd();
+    }
 
     return () => {
       unsubscribeLoaded();
@@ -76,11 +101,21 @@ export default function EarnMore() {
   };
 
   const showGoogleRewardedAd = () => {
-    if (rewardedLoaded) {
-      rewardedAdInstance.show();
-    } else {
-      Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
-      rewardedAdInstance.load();
+    try {
+      const ad = globalRewardedAd;
+      if (rewardedLoaded && ad) {
+        ad.show();
+      } else {
+        Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+        if (ad) {
+          try {
+            ad.load();
+          } catch (err) {}
+        }
+      }
+    } catch (e) {
+      console.log("Error playing rewarded ad:", e);
+      Alert.alert("Ad Error", "Failed to display video ad. Please try again.");
     }
   };
 
@@ -222,7 +257,7 @@ export default function EarnMore() {
       </ScrollView>
 
       {/* --- Google Banner Ad --- */}
-      <View style={styles.bannerContainer}>
+      <View style={[styles.bannerContainer, { bottom: 60 + insets.bottom }]}>
         <BannerAd
           unitId={AD_UNITS.BANNER}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
@@ -315,7 +350,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B5E20' },
   policyBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF9C4', padding: 10, borderRadius: 10, marginBottom: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#FBC02D' },
   policyText: { fontSize: 11, fontWeight: 'bold', color: '#5D4037' },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 150 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 200 },
   listContainer: { width: '100%', marginTop: 10 },
   card: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 25, padding: 12, alignItems: 'center', marginBottom: 20, elevation: 3 },
   iconCircle: { width: 55, height: 55, borderRadius: 27.5, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
@@ -357,10 +392,12 @@ const styles = StyleSheet.create({
   lbCoins: { fontWeight: 'bold', color: '#1B5E20' },
   closeBtn: { marginTop: 20, backgroundColor: '#1B5E20', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 20 },
   bannerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    paddingVertical: 2,
     backgroundColor: 'transparent',
+    zIndex: 99,
   },
 });

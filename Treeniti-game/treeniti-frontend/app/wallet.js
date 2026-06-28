@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
 import { Audio } from 'expo-av';
+import { BannerAd, BannerAdSize, AD_UNITS } from '../config/ads';
 
 import { useConfig } from '../context/ConfigContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -125,7 +126,7 @@ export default function WalletScreen() {
         <View style={{ width: 40 }} /> 
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 180 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 240 }}>
         
         {/* --- 🟢 Balance Card (Exact Screenshot) --- */}
         <LinearGradient colors={['#0F380F', '#1B5E20']} style={styles.balanceCard}>
@@ -297,6 +298,14 @@ export default function WalletScreen() {
 
       </ScrollView>
 
+      {/* Banner Ad floating above bottomTab */}
+      <View style={[styles.bannerAdContainer, { bottom: 60 + insets.bottom }]}>
+        <BannerAd 
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} 
+          unitId={AD_UNITS.BANNER} 
+        />
+      </View>
+
       {/* --- 🟢 BOTTOM NAVBAR (Same as Home) --- */}
       <View style={[styles.bottomTab, { height: 60 + insets.bottom, paddingBottom: insets.bottom }]}>
         <TabItem icon="home-outline" label="Home" onPress={() => router.push('/home')} />
@@ -424,5 +433,18 @@ const styles = StyleSheet.create({
   centerBtn: { marginTop: -22, alignItems: 'center', zIndex: 10000 },
   centerBtnInner: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 8, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
   centerText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center', marginTop: 1, letterSpacing: 0.5 },
-  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' }
+  centerCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  bannerAdContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAF7',
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    zIndex: 9998
+  }
 });

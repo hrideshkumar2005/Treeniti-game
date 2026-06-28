@@ -206,7 +206,7 @@ export default function ReferralTeam() {
       </ScrollView>
 
       {/* --- Google Banner Ad --- */}
-      <View style={styles.bannerContainer}>
+      <View style={[styles.bannerContainer, { bottom: 60 + insets.bottom }]}>
         <BannerAd
           unitId={AD_UNITS.BANNER}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 12, alignItems: 'center', backgroundColor: '#F4F8F4' },
   backBtn: { marginRight: 15 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B5E20' },
-  scrollContent: { paddingBottom: 150 },
+  scrollContent: { paddingBottom: 200 },
 
   // Earnings Card
   earningsCard: { 
@@ -415,10 +415,12 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   bannerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    paddingVertical: 2,
     backgroundColor: 'transparent',
+    zIndex: 99,
   },
 });

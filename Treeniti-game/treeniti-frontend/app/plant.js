@@ -23,11 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import BASE_URL from '../config/api';
-import { RewardedAd, RewardedAdEventType, AD_UNITS } from '../config/ads';
-
-const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
-    requestNonPersonalizedAdsOnly: true,
-});
+import { RewardedAd, RewardedAdEventType, AD_UNITS, adInitPromise, globalRewardedAd } from '../config/ads';
 
 const { width, height } = Dimensions.get('window');
 
@@ -274,26 +270,57 @@ export default function GameHomeScreen() {
     const [rewardedLoaded, setRewardedLoaded] = useState(false);
 
     useEffect(() => {
-        const unsubscribeLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
-            setRewardedLoaded(true);
-        });
+        let unsubscribeLoaded = () => {};
+        let unsubscribeEarned = () => {};
+        let unsubscribeClosed = () => {};
 
-        const unsubscribeEarned = rewardedAdInstance.addAdEventListener(
-            RewardedAdEventType.EARNED_REWARD,
-            () => {
-                if (adCallbackRef.current) {
-                    adCallbackRef.current();
-                    adCallbackRef.current = null;
-                }
+        const setupAd = () => {
+            const ad = globalRewardedAd;
+            if (!ad) {
+                console.log("globalRewardedAd is not created yet in plant.js");
+                return;
             }
-        );
 
-        const unsubscribeClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
-            setRewardedLoaded(false);
-            rewardedAdInstance.load();
-        });
+            setRewardedLoaded(ad.loaded || false);
 
-        rewardedAdInstance.load();
+            unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+                setRewardedLoaded(true);
+            });
+
+            unsubscribeEarned = ad.addAdEventListener(
+                RewardedAdEventType.EARNED_REWARD,
+                () => {
+                    if (adCallbackRef.current) {
+                        adCallbackRef.current();
+                        adCallbackRef.current = null;
+                    }
+                }
+            );
+
+            unsubscribeClosed = ad.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+                setRewardedLoaded(false);
+                adCallbackRef.current = null;
+                try {
+                    ad.load();
+                } catch (err) {
+                    console.log("Error reloading global rewarded ad on close:", err);
+                }
+            });
+
+            if (!ad.loaded) {
+                try {
+                    ad.load();
+                } catch (err) {}
+            }
+        };
+
+        if (adInitPromise) {
+            adInitPromise.then(() => {
+                setupAd();
+            });
+        } else {
+            setupAd();
+        }
 
         return () => {
             unsubscribeLoaded();
@@ -303,28 +330,22 @@ export default function GameHomeScreen() {
     }, []);
 
     const showRewardedAd = (onRewardEarned) => {
-        if (rewardedLoaded) {
-            adCallbackRef.current = onRewardEarned;
-            rewardedAdInstance.show();
-        } else {
-            // Fallback to local simulated countdown ad modal so the user is never stuck
-            adCallbackRef.current = onRewardEarned;
-            setAdCountdown(5);
-            setShowAdModal(true);
-
-            let count = 5;
-            adTimerRef.current = setInterval(() => {
-                count -= 1;
-                setAdCountdown(count);
-                if (count <= 0) {
-                    clearInterval(adTimerRef.current);
-                    setShowAdModal(false);
-                    if (adCallbackRef.current) {
-                        adCallbackRef.current();
-                        adCallbackRef.current = null;
-                    }
+        try {
+            const ad = globalRewardedAd;
+            if (rewardedLoaded && ad) {
+                adCallbackRef.current = onRewardEarned;
+                ad.show();
+            } else {
+                Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+                if (ad) {
+                    try {
+                        ad.load();
+                    } catch (err) {}
                 }
-            }, 1000);
+            }
+        } catch (e) {
+            console.log("Error playing rewarded ad:", e);
+            Alert.alert("Ad Error", "Failed to display video ad. Please try again.");
         }
     };
 
@@ -859,40 +880,7 @@ export default function GameHomeScreen() {
     return (
         <View style={styles.container}>
 
-            {/* --- 📺 AD MODAL (Rewarded Ad Simulation) --- */}
-            <Modal visible={showAdModal} transparent={false} animationType="fade" statusBarTranslucent>
-                <LinearGradient colors={['#0a0a0a', '#1a1a2e', '#16213e']} style={{ flex: 1, justifyContent: 'space-between', alignItems: 'center', paddingVertical: 60, paddingHorizontal: 20 }}>
-                    {/* Top Ad Label */}
-                    <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                            <Text style={{ color: '#aaa', fontSize: 11, fontWeight: 'bold', letterSpacing: 1 }}>SPONSORED</Text>
-                        </View>
-                        <View style={{ backgroundColor: '#FFD700', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 }}>
-                            <Text style={{ color: '#000', fontSize: 13, fontWeight: '900' }}>{adCountdown}s</Text>
-                        </View>
-                    </View>
 
-                    {/* Ad Content */}
-                    <View style={{ alignItems: 'center', gap: 20 }}>
-                        <Text style={{ fontSize: 70 }}>🌱</Text>
-                        <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', textAlign: 'center', letterSpacing: 1 }}>Grow More Trees!</Text>
-                        <Text style={{ color: '#A5D6A7', fontSize: 15, textAlign: 'center', lineHeight: 24 }}>
-                            Join millions planting{'\n'}virtual & real trees for a{'\n'}greener planet 🌍
-                        </Text>
-                        <View style={{ backgroundColor: 'rgba(76,175,80,0.2)', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 30, borderWidth: 1, borderColor: '#4CAF50' }}>
-                            <Text style={{ color: '#4CAF50', fontSize: 14, fontWeight: '900', letterSpacing: 2 }}>TREENITI — PLANT & EARN</Text>
-                        </View>
-                    </View>
-
-                    {/* Bottom Progress */}
-                    <View style={{ width: '100%', gap: 12 }}>
-                        <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' }}>
-                            <View style={{ height: '100%', width: `${((5 - adCountdown) / 5) * 100}%`, backgroundColor: '#FFD700', borderRadius: 2 }} />
-                        </View>
-                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, textAlign: 'center' }}>Watch to earn your watering reward 💧</Text>
-                    </View>
-                </LinearGradient>
-            </Modal>
 
 
 

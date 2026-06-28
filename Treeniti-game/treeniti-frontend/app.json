@@ -3,7 +3,7 @@
     "name": "Treeniti",
     "slug": "treeniti",
     "newArchEnabled": true,
-    "version": "1.0.5",
+    "version": "1.0.6",
     "icon": "./assets/treeniti_logo.png",
     "splash": {
       "image": "./assets/blank.png",
@@ -21,12 +21,19 @@
     },
     "android": {
       "package": "com.treeniti.app2",
-      "versionCode": 12,
+      "versionCode": 20,
       "blockedPermissions": [
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO"
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ]
     },
     "plugins": [
@@ -58,9 +65,13 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "cb821a54-e82d-4a6c-ba96-619e287a4b56"
+        "projectId": "1c1cbbf5-07ce-47ca-8678-b9bb8c1107f3"
       }
     },
-    "owner": "hridesh2005"
+    "owner": "treeniti"
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-9702132255395061~2646750769",
+    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
   }
 }

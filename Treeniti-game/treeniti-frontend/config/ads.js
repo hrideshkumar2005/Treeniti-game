@@ -1,76 +1,151 @@
 import React from 'react';
-import { View, Text, Alert, NativeModules } from 'react-native';
+import { View, Text, Alert, Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Try to safely import react-native-google-mobile-ads
+// Set FORCE_TEST_ADS to true to load Google's official demo/test ads in release/APK builds.
+// Set to false to use your real production AdMob ad units when releasing the app to play store.
+export const FORCE_TEST_ADS = false;
+
+// ----------------------------------------------------
+// 1. MOCK CLASSES FOR EXPO GO / WEB / FALLBACK
+// ----------------------------------------------------
+class MockInterstitialAd {
+  static createForAdRequest(adUnitId, options) {
+    return new MockInterstitialAd();
+  }
+  loaded = true;
+  listeners = {};
+
+  addAdEventListener(eventType, callback) {
+    if (!this.listeners[eventType]) this.listeners[eventType] = [];
+    this.listeners[eventType].push(callback);
+    
+    // Trigger loaded automatically in mock mode
+    if (eventType === 'loaded') {
+      setTimeout(() => callback(), 100);
+    }
+
+    return () => {
+      this.listeners[eventType] = this.listeners[eventType].filter(cb => cb !== callback);
+    };
+  }
+
+  load() {
+    this.loaded = true;
+  }
+
+  show() {
+    Alert.alert(
+      "Ads (Mock Mode)",
+      "This is a Google Full Screen Interstitial Ad demo.",
+      [
+        {
+          text: "Close Ad",
+          onPress: () => {
+            if (this.listeners['closed']) {
+              this.listeners['closed'].forEach(cb => cb());
+            }
+          }
+        }
+      ]
+    );
+  }
+}
+
+class MockRewardedAd {
+  static createForAdRequest(adUnitId, options) {
+    return new MockRewardedAd();
+  }
+  loaded = true;
+  listeners = {};
+
+  addAdEventListener(eventType, callback) {
+    if (!this.listeners[eventType]) this.listeners[eventType] = [];
+    this.listeners[eventType].push(callback);
+
+    if (eventType === 'loaded') {
+      setTimeout(() => callback(), 100);
+    }
+
+    return () => {
+      this.listeners[eventType] = this.listeners[eventType].filter(cb => cb !== callback);
+    };
+  }
+
+  load() {
+    this.loaded = true;
+  }
+
+  show() {
+    Alert.alert(
+      "Video Ad (Mock Mode)",
+      "Watch this demo video to receive your coins reward!",
+      [
+        {
+          text: "Claim Reward 🪙",
+          onPress: () => {
+            if (this.listeners['earned_reward']) {
+              this.listeners['earned_reward'].forEach(cb => cb({ type: 'coins', amount: 10 }));
+            }
+            if (this.listeners['closed']) {
+              this.listeners['closed'].forEach(cb => cb());
+            }
+          }
+        },
+        {
+          text: "Cancel",
+          onPress: () => {
+            if (this.listeners['closed']) {
+              this.listeners['closed'].forEach(cb => cb());
+            }
+          }
+        }
+      ]
+    );
+  }
+}
+
+// ----------------------------------------------------
+// 2. CHECK ADMOB AVAILABILITY & EXPORT CLASSES
+// ----------------------------------------------------
 let googleMobileAds = null;
 let isAdmobAvailable = false;
+export let adInitPromise = null;
 
 try {
-  // Check if the native module actually exists in the runtime environment
-  // In Expo Go or simulator builds without native libraries, NativeModules won't contain any RNGoogleMobileAds keys.
-  const hasNativeAdModule = NativeModules && Object.keys(NativeModules).some(key => key.startsWith('RNGoogleMobileAds'));
+  const isExpoGo = Constants.appOwnership === 'expo';
+  const isWeb = Platform.OS === 'web';
 
-  if (hasNativeAdModule) {
+  if (!isExpoGo && !isWeb) {
     googleMobileAds = require('react-native-google-mobile-ads');
     isAdmobAvailable = true;
-    
-    // Safely initialize the Mobile Ads SDK
-    const mobileAds = googleMobileAds.default || googleMobileAds;
-    if (typeof mobileAds === 'function') {
-      mobileAds()
-        .initialize()
-        .then((adapterStatuses) => {
-          console.log('AdMob SDK initialized successfully:', adapterStatuses);
-        })
-        .catch((err) => {
-          console.log('AdMob SDK initialization failed:', err);
-        });
-    }
-  } else {
-    console.log("AdMob native modules not found in NativeModules, falling back to simulator mock ads.");
-    isAdmobAvailable = false;
   }
 } catch (error) {
   console.log("Error checking/loading AdMob SDK:", error);
   isAdmobAvailable = false;
 }
 
-// ----------------------------------------------------
-// 1. AD UNIT IDs
-// ----------------------------------------------------
-export const AD_UNITS = {
-  BANNER: __DEV__
-    ? (isAdmobAvailable ? googleMobileAds.TestIds.BANNER : 'mock-banner')
-    : 'ca-app-pub-9702132255395061/3725548626',
-  INTERSTITIAL: __DEV__
-    ? (isAdmobAvailable ? googleMobileAds.TestIds.INTERSTITIAL : 'mock-interstitial')
-    : 'ca-app-pub-9702132255395061/6160140271',
-  REWARDED: __DEV__
-    ? (isAdmobAvailable ? googleMobileAds.TestIds.REWARDED : 'mock-rewarded')
-    : 'ca-app-pub-9702132255395061/2643036865',
-};
+export const InterstitialAd = (isAdmobAvailable && googleMobileAds?.InterstitialAd)
+  ? googleMobileAds.InterstitialAd
+  : MockInterstitialAd;
 
-// ----------------------------------------------------
-// 2. EXPORTS & FALLBACKS
-// ----------------------------------------------------
+export const RewardedAd = (isAdmobAvailable && googleMobileAds?.RewardedAd)
+  ? googleMobileAds.RewardedAd
+  : MockRewardedAd;
 
-// BannerAdSize export
-export const BannerAdSize = isAdmobAvailable 
+export const BannerAdSize = (isAdmobAvailable && googleMobileAds?.BannerAdSize)
   ? googleMobileAds.BannerAdSize 
   : { ANCHORED_ADAPTIVE_BANNER: 'BANNER' };
 
-// AdEventType export
-export const AdEventType = isAdmobAvailable 
+export const AdEventType = (isAdmobAvailable && googleMobileAds?.AdEventType)
   ? googleMobileAds.AdEventType 
   : { LOADED: 'loaded', CLOSED: 'closed' };
 
-// RewardedAdEventType export
-export const RewardedAdEventType = isAdmobAvailable 
+export const RewardedAdEventType = (isAdmobAvailable && googleMobileAds?.RewardedAdEventType)
   ? googleMobileAds.RewardedAdEventType 
   : { LOADED: 'loaded', EARNED_REWARD: 'earned_reward', CLOSED: 'closed' };
 
-// BannerAd component wrapper
-export const BannerAd = isAdmobAvailable 
+export const BannerAd = (isAdmobAvailable && googleMobileAds?.BannerAd)
   ? googleMobileAds.BannerAd 
   : (props) => (
       <View style={{
@@ -89,104 +164,67 @@ export const BannerAd = isAdmobAvailable
       </View>
     );
 
-// InterstitialAd wrapper class
-export const InterstitialAd = isAdmobAvailable
-  ? googleMobileAds.InterstitialAd
-  : class MockInterstitialAd {
-      static createForAdRequest(adUnitId, options) {
-        return new MockInterstitialAd();
-      }
-      loaded = true;
-      listeners = {};
+// ----------------------------------------------------
+// 3. AD UNIT IDs
+// ----------------------------------------------------
+export const AD_UNITS = {
+  BANNER: (FORCE_TEST_ADS || __DEV__)
+    ? (isAdmobAvailable && googleMobileAds?.TestIds?.BANNER ? googleMobileAds.TestIds.BANNER : 'ca-app-pub-3940256099942544/6300978111')
+    : 'ca-app-pub-9702132255395061/3725548626',
+  INTERSTITIAL: (FORCE_TEST_ADS || __DEV__)
+    ? (isAdmobAvailable && googleMobileAds?.TestIds?.INTERSTITIAL ? googleMobileAds.TestIds.INTERSTITIAL : 'ca-app-pub-3940256099942544/1033173712')
+    : 'ca-app-pub-9702132255395061/6160140271',
+  REWARDED: (FORCE_TEST_ADS || __DEV__)
+    ? (isAdmobAvailable && googleMobileAds?.TestIds?.REWARDED ? googleMobileAds.TestIds.REWARDED : 'ca-app-pub-3940256099942544/5224354917')
+    : 'ca-app-pub-9702132255395061/2643036865',
+};
 
-      addAdEventListener(eventType, callback) {
-        if (!this.listeners[eventType]) this.listeners[eventType] = [];
-        this.listeners[eventType].push(callback);
-        
-        // Trigger loaded automatically in mock mode
-        if (eventType === 'loaded') {
-          setTimeout(() => callback(), 100);
-        }
+// ----------------------------------------------------
+// 4. GLOBAL PRE-LOADED AD INSTANCES (SINGLETONS)
+// ----------------------------------------------------
+export let globalRewardedAd = null;
+export let globalInterstitialAd = null;
 
-        return () => {
-          this.listeners[eventType] = this.listeners[eventType].filter(cb => cb !== callback);
-        };
-      }
+const createGlobalAds = () => {
+  try {
+    globalRewardedAd = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
+      requestNonPersonalizedAdsOnly: true,
+    });
+    globalRewardedAd.load();
+  } catch (e) {
+    console.log("Error creating globalRewardedAd:", e);
+  }
 
-      load() {
-        this.loaded = true;
-      }
+  try {
+    globalInterstitialAd = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
+      requestNonPersonalizedAdsOnly: true,
+    });
+    globalInterstitialAd.load();
+  } catch (e) {
+    console.log("Error creating globalInterstitialAd:", e);
+  }
+};
 
-      show() {
-        Alert.alert(
-          "Ads (Mock Mode)",
-          "This is a Google Full Screen Interstitial Ad demo.",
-          [
-            {
-              text: "Close Ad",
-              onPress: () => {
-                if (this.listeners['closed']) {
-                  this.listeners['closed'].forEach(cb => cb());
-                }
-              }
-            }
-          ]
-        );
-      }
-    };
-
-// RewardedAd wrapper class
-export const RewardedAd = isAdmobAvailable
-  ? googleMobileAds.RewardedAd
-  : class MockRewardedAd {
-      static createForAdRequest(adUnitId, options) {
-        return new MockRewardedAd();
-      }
-      loaded = true;
-      listeners = {};
-
-      addAdEventListener(eventType, callback) {
-        if (!this.listeners[eventType]) this.listeners[eventType] = [];
-        this.listeners[eventType].push(callback);
-
-        if (eventType === 'loaded') {
-          setTimeout(() => callback(), 100);
-        }
-
-        return () => {
-          this.listeners[eventType] = this.listeners[eventType].filter(cb => cb !== callback);
-        };
-      }
-
-      load() {
-        this.loaded = true;
-      }
-
-      show() {
-        Alert.alert(
-          "Video Ad (Mock Mode)",
-          "Watch this demo video to receive your coins reward!",
-          [
-            {
-              text: "Claim Reward 🪙",
-              onPress: () => {
-                if (this.listeners['earned_reward']) {
-                  this.listeners['earned_reward'].forEach(cb => cb({ type: 'coins', amount: 10 }));
-                }
-                if (this.listeners['closed']) {
-                  this.listeners['closed'].forEach(cb => cb());
-                }
-              }
-            },
-            {
-              text: "Cancel",
-              onPress: () => {
-                if (this.listeners['closed']) {
-                  this.listeners['closed'].forEach(cb => cb());
-                }
-              }
-            }
-          ]
-        );
-      }
-    };
+// Start initialization
+if (isAdmobAvailable && googleMobileAds) {
+  const mobileAds = googleMobileAds.default || googleMobileAds;
+  if (typeof mobileAds === 'function') {
+    adInitPromise = mobileAds()
+      .initialize()
+      .then((adapterStatuses) => {
+        console.log('AdMob SDK initialized successfully:', adapterStatuses);
+        createGlobalAds();
+        return adapterStatuses;
+      })
+      .catch((err) => {
+        console.log('AdMob SDK initialization failed:', err);
+        createGlobalAds(); // Fallback creation if initialization fails
+        return null;
+      });
+  } else {
+    createGlobalAds();
+  }
+} else {
+  // If native AdMob is not available (Expo Go / Web), create mock singletons immediately
+  createGlobalAds();
+}

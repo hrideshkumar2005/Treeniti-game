@@ -19,15 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import BASE_URL from '../config/api';
-import { InterstitialAd, RewardedAd, AdEventType, RewardedAdEventType, AD_UNITS } from '../config/ads';
-
-const interstitialAdInstance = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
-  requestNonPersonalizedAdsOnly: true,
-});
-
-const rewardedAdInstance = RewardedAd.createForAdRequest(AD_UNITS.REWARDED, {
-  requestNonPersonalizedAdsOnly: true,
-});
+import { InterstitialAd, RewardedAd, AdEventType, RewardedAdEventType, AD_UNITS, adInitPromise, globalRewardedAd, globalInterstitialAd } from '../config/ads';
 
 const SOUNDS = {
   spin: require('../assets/sounds/spin_sound.wav'),
@@ -78,34 +70,73 @@ export default function SpinWheelScreen() {
   }, []);
 
   useEffect(() => {
-    // 1. Load Rewarded Ad listeners
-    const unsubRewardedLoaded = rewardedAdInstance.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      setRewardedLoaded(true);
-    });
-    const unsubRewardedEarned = rewardedAdInstance.addAdEventListener(
-      RewardedAdEventType.EARNED_REWARD,
-      () => {
-        handleSpin(true);
+    let unsubRewardedLoaded = () => {};
+    let unsubRewardedEarned = () => {};
+    let unsubRewardedClosed = () => {};
+    let unsubInterstitialLoaded = () => {};
+    let unsubInterstitialClosed = () => {};
+
+    const setupAds = () => {
+      const rewardedAd = globalRewardedAd;
+      const interstitialAd = globalInterstitialAd;
+
+      if (rewardedAd) {
+        setRewardedLoaded(rewardedAd.loaded || false);
+        unsubRewardedLoaded = rewardedAd.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          setRewardedLoaded(true);
+        });
+        unsubRewardedEarned = rewardedAd.addAdEventListener(
+          RewardedAdEventType.EARNED_REWARD,
+          () => {
+            handleSpin(true);
+          }
+        );
+        unsubRewardedClosed = rewardedAd.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+          setRewardedLoaded(false);
+          try {
+            rewardedAd.load();
+          } catch (err) {
+            console.log("Error reloading global rewarded ad in spin.js:", err);
+          }
+        });
+
+        if (!rewardedAd.loaded) {
+          try {
+            rewardedAd.load();
+          } catch (err) {}
+        }
       }
-    );
-    const unsubRewardedClosed = rewardedAdInstance.addAdEventListener(RewardedAdEventType.CLOSED, () => {
-      setRewardedLoaded(false);
-      rewardedAdInstance.load();
-    });
 
-    // 2. Load Interstitial Ad listeners
-    const unsubInterstitialLoaded = interstitialAdInstance.addAdEventListener(AdEventType.LOADED, () => {
-      setInterstitialLoaded(true);
-    });
-    const unsubInterstitialClosed = interstitialAdInstance.addAdEventListener(AdEventType.CLOSED, () => {
-      setInterstitialLoaded(false);
-      interstitialAdInstance.load();
-      router.back();
-    });
+      if (interstitialAd) {
+        setInterstitialLoaded(interstitialAd.loaded || false);
+        unsubInterstitialLoaded = interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
+          setInterstitialLoaded(true);
+        });
+        unsubInterstitialClosed = interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
+          setInterstitialLoaded(false);
+          try {
+            interstitialAd.load();
+          } catch (err) {
+            console.log("Error reloading global interstitial ad in spin.js:", err);
+          }
+          router.back();
+        });
 
-    // Load both ads
-    rewardedAdInstance.load();
-    interstitialAdInstance.load();
+        if (!interstitialAd.loaded) {
+          try {
+            interstitialAd.load();
+          } catch (err) {}
+        }
+      }
+    };
+
+    if (adInitPromise) {
+      adInitPromise.then(() => {
+        setupAds();
+      });
+    } else {
+      setupAds();
+    }
 
     return () => {
       unsubRewardedLoaded();
@@ -117,18 +148,34 @@ export default function SpinWheelScreen() {
   }, []);
 
   const triggerAdWatch = () => {
-    if (rewardedLoaded) {
-      rewardedAdInstance.show();
-    } else {
-      Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
-      rewardedAdInstance.load();
+    try {
+      const ad = globalRewardedAd;
+      if (rewardedLoaded && ad) {
+        ad.show();
+      } else {
+        Alert.alert("Loading Ad", "Google Video Ad is loading. Please try again in a moment...");
+        if (ad) {
+          try {
+            ad.load();
+          } catch (err) {}
+        }
+      }
+    } catch (e) {
+      console.log("Error playing rewarded ad:", e);
+      Alert.alert("Ad Error", "Failed to display video ad. Please try again.");
     }
   };
 
   const handleBackPress = () => {
-    if (interstitialLoaded) {
-      interstitialAdInstance.show();
-    } else {
+    try {
+      const ad = globalInterstitialAd;
+      if (interstitialLoaded && ad) {
+        ad.show();
+      } else {
+        router.back();
+      }
+    } catch (e) {
+      console.log("Error playing interstitial ad:", e);
       router.back();
     }
   };

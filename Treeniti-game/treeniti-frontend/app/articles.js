@@ -5,6 +5,7 @@ import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/api';
+import { BannerAd, BannerAdSize, AD_UNITS } from '../config/ads';
 
 export default function Articles() {
   const router = useRouter();
@@ -102,22 +103,32 @@ export default function Articles() {
 
       {!activeArticle ? (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {articles.map((item) => (
-            <View key={item._id} style={styles.articleCard}>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardHeading}>{item.title}</Text>
-                <Text style={styles.cardDesc} numberOfLines={2}>{item.content}</Text>
-                <View style={styles.footerRow}>
-                  <View>
-                    <Text style={styles.statText}><Ionicons name="time" size={12}/> {item.requiredReadingTimeSec}s</Text>
-                    <Text style={styles.statText}><FontAwesome5 name="coins" size={10}/> {item.readingRewardCoins} Coins</Text>
+          {articles.map((item, index) => (
+            <React.Fragment key={item._id}>
+              <View style={styles.articleCard}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardHeading}>{item.title}</Text>
+                  <Text style={styles.cardDesc} numberOfLines={2}>{item.content}</Text>
+                  <View style={styles.footerRow}>
+                    <View>
+                      <Text style={styles.statText}><Ionicons name="time" size={12}/> {item.requiredReadingTimeSec}s</Text>
+                      <Text style={styles.statText}><FontAwesome5 name="coins" size={10}/> {item.readingRewardCoins} Coins</Text>
+                    </View>
+                    <TouchableOpacity style={styles.readBtn} onPress={() => startReading(item)}>
+                      <Text style={styles.readBtnText}>Read & Earn</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity style={styles.readBtn} onPress={() => startReading(item)}>
-                    <Text style={styles.readBtnText}>Read & Earn</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
-            </View>
+              {(index + 1) % 2 === 0 && (
+                <View style={{ marginVertical: 10 }}>
+                  <BannerAd 
+                    size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} 
+                    unitId={AD_UNITS.BANNER} 
+                  />
+                </View>
+              )}
+            </React.Fragment>
           ))}
         </ScrollView>
       ) : (
@@ -135,6 +146,12 @@ export default function Articles() {
             <Text style={styles.fullContent}>{activeArticle.content}</Text>
             <View style={{height: 100}} />
           </ScrollView>
+          <View style={{ backgroundColor: '#F9FDF9', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#eee' }}>
+            <BannerAd 
+              size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} 
+              unitId={AD_UNITS.BANNER} 
+            />
+          </View>
         </View>
       )}
     </SafeAreaView>
